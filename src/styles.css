@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/* JetBrains Mono est chargé via <link> dans index.html */
+
+/* ── PULSE — direction artistique ─────────────────────────── */
+:root {
+  --background: #00000a;
+  --grid-lines: #0d1f3c;
+  --nuclear: #3b82f6;
+  --wind: #22c55e;
+  --hydro: #06b6d4;
+  --solar: #eab308;
+  --gas: #f97316;
+  --alert-orange: #f97316;
+  --alert-red: #ef4444;
+  --text-primary: #e2e8f0;
+  --text-muted: #475569;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scanline overlay très subtil sur tout l'écran */
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03) 0px,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Glow helpers */
+.glow-nuclear { filter: drop-shadow(0 0 6px var(--nuclear)); }
+.glow-wind    { filter: drop-shadow(0 0 6px var(--wind)); }
+.glow-hydro   { filter: drop-shadow(0 0 6px var(--hydro)); }
+.glow-solar   { filter: drop-shadow(0 0 6px var(--solar)); }
+.glow-gas     { filter: drop-shadow(0 0 6px var(--gas)); }
+
+/* Flicker blackout */
+@keyframes flicker {
+  0%   { opacity: 1; }
+  10%  { opacity: 0.3; }
+  15%  { opacity: 0.9; }
+  25%  { opacity: 0.15; }
+  30%  { opacity: 0.7; }
+  45%  { opacity: 0.2; }
+  50%  { opacity: 1; }
+  70%  { opacity: 0.4; }
+  100% { opacity: 0.9; }
+}
+
+/* Apparition douce de l'UI */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up { animation: fade-up 0.6s ease both; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.2; }
+}
+.live-dot { animation: blink 1.6s ease-in-out infinite; }
+
+/* Barres de jauge */
+.gauge-fill {
+  transition: width 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Scrollbar discrète */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e3a5f; }
+
+.map-cursor { cursor: crosshair; }
+
+/* Typo helpers du PRD */
+.t-title  { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3em; opacity: 0.5; }
+.t-num    { font-size: 24px; font-weight: 700; }
+.t-label  { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+.t-narration { font-size: 13px; line-height: 1.7; font-style: italic; }
