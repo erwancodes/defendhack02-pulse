@@ -214,14 +214,14 @@ La France brille en bleu (propre), ses voisins en rouge.
 
 ### ✅ Voix IA réelle (OpenRouter) — LIVRÉE
 `openai/gpt-4o-mini` via OpenRouter, branché sur les **vrais chiffres** du mix
-courant (prompt système du PRD : sobre, factuel, ≤40 mots). Utilisée pour le
+courant (prompt serveur : sobre, factuel, ≤40 mots). Utilisée pour le
 **commentaire réseau périodique** (idle 30s) et les **scénarios « et si »** ;
 les survols restent en local (instantané). Pattern : local immédiat → **upgrade
 IA** quand elle répond (garde anti-périmé via compteur), tag **« · ia »** affiché.
-**Fallback total** : sans `VITE_OPENROUTER_KEY`, ou si l'appel échoue/timeout (7 s),
-retour transparent à la voix locale `genVoix`. Clé côté client (`VITE_…`), voir
-`.env.example` — note : pour la prod, déplaçable derrière une fonction serverless.
-Vérifié : avec clé → fetch OpenRouter + tag « · ia » ; clé invalide → fallback local propre.
+**Fallback total** : sans `OPENROUTER_KEY`, ou si l'appel échoue/timeout (7 s),
+retour transparent à la voix locale `genVoix`. Clé côté serveur via `/api/voix`,
+voir `.env.example`.
+Vérifié : build OK ; clé absente → fallback local propre.
 **Effort 🟢 · Wow ⭐⭐⭐** — montre un usage *fin* du LLM (données réelles), pas un wrapper.
 
 ### ✅ Détection de tension réseau (réel vs prévision) — LIVRÉE

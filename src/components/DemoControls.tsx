@@ -4,6 +4,8 @@ import type { EcoMixRecord } from '../lib/eco2mix'
 
 interface Props {
   data: EcoMixRecord
+  audioOn: boolean
+  onAudioChange: (enabled: boolean) => void
 }
 
 type MaybeWebkitAudio = typeof window & { webkitAudioContext?: typeof AudioContext }
@@ -12,8 +14,18 @@ function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 }
 
-export function DemoControls({ data }: Props) {
-  const [audioOn, setAudioOn] = useState(false)
+async function unlockHtmlAudio() {
+  try {
+    const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQQAAAAAAA==')
+    audio.volume = 0
+    await audio.play()
+    audio.pause()
+  } catch {
+    /* Browsers may still reject; generated audio will report unavailable. */
+  }
+}
+
+export function DemoControls({ data, audioOn, onAudioChange }: Props) {
   const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement))
   const [capturing, setCapturing] = useState(false)
   const ctxRef = useRef<AudioContext | null>(null)
@@ -71,7 +83,7 @@ export function DemoControls({ data }: Props) {
       filterRef.current = filter
       gainRef.current = gain
     } catch {
-      setAudioOn(false)
+      onAudioChange(false)
     }
 
     return () => {
@@ -81,7 +93,7 @@ export function DemoControls({ data }: Props) {
         /* noop */
       }
     }
-  }, [audioOn])
+  }, [audioOn, onAudioChange])
 
   useEffect(() => {
     const ctx = ctxRef.current
@@ -142,7 +154,10 @@ export function DemoControls({ data }: Props) {
         title={audioOn ? 'Couper le son ambiant' : 'Activer le son ambiant'}
         aria-label={audioOn ? 'Couper le son ambiant' : 'Activer le son ambiant'}
         data-active={audioOn}
-        onClick={() => setAudioOn((v) => !v)}
+        onClick={() => {
+          if (!audioOn) void unlockHtmlAudio()
+          onAudioChange(!audioOn)
+        }}
       >
         {audioOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
       </button>

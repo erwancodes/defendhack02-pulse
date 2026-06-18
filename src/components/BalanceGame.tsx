@@ -59,7 +59,8 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
 
-function clean(n: number): number {
+function clean(value: unknown): number {
+  const n = Number(value)
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 

@@ -33,6 +33,7 @@ import { DiscoveryScore } from '../components/DiscoveryScore'
 import { SummaryScreen } from '../components/SummaryScreen'
 import { LiveHomesCounter } from '../components/LiveHomesCounter'
 import { DemoControls } from '../components/DemoControls'
+import { QuestionIA } from '../components/QuestionIA'
 
 const FACETS: Record<string, string> = {
   centrale: 'une centrale survolée',
@@ -115,7 +116,9 @@ function Home() {
   const [isolate, setIsolate] = useState<EnergySource | null>(null)
   const [voiceText, setVoiceText] = useState('')
   const [voiceIA, setVoiceIA] = useState(false)
+  const [audioOn, setAudioOn] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  const [showQuestionIA, setShowQuestionIA] = useState(false)
   const [simpleMode, setSimpleMode] = useState(false)
   const [game, setGame] = useState<'balance' | 'quiz' | null>(null)
   const [gameMenu, setGameMenu] = useState(false)
@@ -622,7 +625,7 @@ function Home() {
           </span>
 
           {/* jouer — CTA accentué (jaune) */}
-          <DemoControls data={data} />
+          <DemoControls data={data} audioOn={audioOn} onAudioChange={setAudioOn} />
 
           <button
             onClick={() => setSimpleMode((v) => !v)}
@@ -634,6 +637,18 @@ function Home() {
             }}
           >
             mode simple
+          </button>
+
+          <button
+            onClick={() => setShowQuestionIA((v) => !v)}
+            className="nav-pill mobile-hide"
+            style={{
+              borderColor: showQuestionIA ? 'var(--nuclear)' : '#1e3a5f',
+              color: showQuestionIA ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
+              background: showQuestionIA ? 'rgba(0,110,182,0.2)' : undefined,
+            }}
+          >
+            question IA
           </button>
 
           <div className="relative">
@@ -854,10 +869,11 @@ function Home() {
 
       {/* ── Voix du réseau ── */}
       <footer className="control-footer flex min-h-[66px] shrink-0 items-center border-t px-4 py-3">
-        <VoixReseau text={voiceText} ia={voiceIA} />
+        <VoixReseau text={voiceText} ia={voiceIA} audioOn={audioOn} />
       </footer>
 
       {showSummary && <SummaryScreen data={data} simpleMode={simpleMode} onClose={() => setShowSummary(false)} />}
+      {showQuestionIA && <QuestionIA data={data} onClose={() => setShowQuestionIA(false)} />}
       {game === 'balance' && <BalanceGame data={live} onClose={() => setGame(null)} />}
       {game === 'quiz' && <QuizGame data={live} onClose={() => setGame(null)} />}
     </div>

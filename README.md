@@ -21,7 +21,7 @@ Une application React qui affiche le réseau électrique français en temps rée
 - mini-jeu "équilibre le réseau" avec sliders par source ;
 - drill-down région puis département ;
 - replay des dernières 24 h ;
-- briefing réseau local, avec option IA via OpenRouter.
+- briefing réseau local, avec option IA réelle via `/api/voix` et OpenRouter côté serveur.
 
 ## Démo rapide
 
@@ -50,7 +50,7 @@ Une application React qui affiche le réseau électrique français en temps rée
 - Canvas API
 - SVG
 - ODRE / RTE eco2mix
-- OpenRouter optionnel pour la voix IA
+- OpenRouter optionnel pour la voix IA côté serveur
 - Vercel pour le déploiement
 
 ## Installation
@@ -61,6 +61,12 @@ npm run dev
 ```
 
 Application locale : [http://localhost:3000](http://localhost:3000)
+
+Les routes `/api/voix` et `/api/tts` sont aussi servies en local par Vite. Si tu veux tester le comportement exact Vercel :
+
+```bash
+npm run dev:vercel
+```
 
 ## Build
 
@@ -73,7 +79,7 @@ npm run preview
 
 PULSE fonctionne sans clé API. La voix réseau locale est utilisée par défaut.
 
-Pour activer la voix IA optionnelle :
+Pour activer la voix IA réelle :
 
 ```bash
 cp .env.example .env.local
@@ -82,8 +88,15 @@ cp .env.example .env.local
 Puis renseigner :
 
 ```bash
-VITE_OPENROUTER_KEY=
+OPENROUTER_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENAI_API_KEY=
+OPENAI_ASK_MODEL=gpt-4.1-mini
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+OPENAI_TTS_VOICE=cedar
 ```
+
+Les clés ne sont jamais exposées au navigateur : le frontend appelle `/api/voix` pour le texte IA et `/api/tts` pour l'audio naturel. Sans clé ou en cas d'erreur TTS, l'app garde le texte local et ne lance pas de voix robotique.
 
 Les fichiers `.env`, `.env.local` et `.env.*.local` sont ignorés par Git.
 

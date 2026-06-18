@@ -1,7 +1,7 @@
 // ── Voix du réseau : commentaire contextuel ─────────────────
 // Génération locale déterministe-mais-variée : aucune clé requise,
 // fonctionne hors-ligne, ne casse jamais en démo. Branchable sur
-// OpenRouter via VITE_OPENROUTER_KEY si présent.
+// Upgrade IA via /api/voix si OPENROUTER_KEY est configurée côté serveur.
 import type { EcoMixRecord } from './eco2mix'
 import { pct, foyers, tension } from './eco2mix'
 
