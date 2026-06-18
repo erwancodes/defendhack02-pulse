@@ -3,7 +3,7 @@
 // fonctionne hors-ligne, ne casse jamais en démo. Branchable sur
 // OpenRouter via VITE_OPENROUTER_KEY si présent.
 import type { EcoMixRecord } from './eco2mix'
-import { pct, foyers } from './eco2mix'
+import { pct, foyers, tension } from './eco2mix'
 
 export interface VoixContext {
   data: EcoMixRecord
@@ -66,6 +66,17 @@ function commentaireReseau(data: EcoMixRecord): string {
   if (hydro > 10) {
     lignes.push(
       `L'hydraulique tient ${hydro}% du réseau. L'eau des barrages se transforme en lumière, instantanément, à la demande.`,
+    )
+  }
+
+  const t = tension(data)
+  if (t?.state === 'tendu') {
+    lignes.push(
+      `La consommation dépasse la prévision de ${Math.round(t.ecart).toLocaleString('fr-FR')} MW. Le réseau est plus sollicité que prévu en ce moment.`,
+    )
+  } else if (t?.state === 'detendu') {
+    lignes.push(
+      `La demande reste ${Math.abs(Math.round(t.ecart)).toLocaleString('fr-FR')} MW sous la prévision. Le réseau a de la marge.`,
     )
   }
 

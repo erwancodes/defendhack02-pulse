@@ -42,14 +42,14 @@ export function BlackoutOverlay({ titre }: Props) {
   return (
     <div
       className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center fade-up"
-      style={{ background: 'radial-gradient(circle at center, rgba(239,68,68,0.06), rgba(0,0,0,0.55))' }}
+      style={{ background: 'radial-gradient(circle at center, rgba(239,68,68,0.08), rgba(2,8,22,0.72))' }}
     >
       <div className="text-center">
         <div
           className="t-label mb-3"
           style={{ color: 'var(--alert-red)', letterSpacing: '0.4em', animation: 'flicker 0.7s steps(2) infinite' }}
         >
-          ⚠ alerte réseau
+          alerte réseau
         </div>
         <div
           className="font-bold"

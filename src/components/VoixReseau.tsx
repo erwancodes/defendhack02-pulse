@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   text: string
+  ia?: boolean
 }
 
 // Effet de streaming caractère par caractère.
-export function VoixReseau({ text }: Props) {
+export function VoixReseau({ text, ia }: Props) {
   const [shown, setShown] = useState('')
   const timer = useRef<number>(0)
 
@@ -26,16 +27,25 @@ export function VoixReseau({ text }: Props) {
   const typing = shown.length < text.length
 
   return (
-    <div className="flex items-start gap-3">
-      <span className="t-label mt-0.5 shrink-0 text-[var(--text-muted)]">voix du réseau</span>
-      <p className="t-narration text-[var(--text-primary)]">
+    <div className="flex w-full items-start gap-4">
+      <span className="t-label mt-0.5 shrink-0 text-[var(--engie-blue-soft)]">
+        briefing réseau
+        {ia && (
+          <span
+            className="ml-2"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            · ia
+          </span>
+        )}
+      </span>
+      <p className="t-narration max-w-[92ch] text-[var(--text-primary)]">
         {shown}
         <span
           className="ml-0.5 inline-block w-2 align-middle"
           style={{
             borderBottom: '2px solid var(--nuclear)',
             opacity: typing ? 1 : 0,
-            filter: 'drop-shadow(0 0 4px var(--nuclear))',
           }}
         >
           &nbsp;

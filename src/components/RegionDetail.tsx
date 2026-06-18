@@ -11,10 +11,10 @@ import { REGION_INFO } from '../lib/regionInfo'
 
 // couleurs des sources régionales
 const COLORS: Record<string, string> = {
-  nucleaire: '#3b82f6',
+  nucleaire: '#00a6d6',
   hydraulique: '#06b6d4',
   eolien: '#22c55e',
-  solaire: '#eab308',
+  solaire: '#d8b33f',
   thermique: '#f97316',
   bioenergies: '#84cc16',
 }
@@ -60,8 +60,7 @@ export function RegionDetail({ region, onBack }: Props) {
 
   return (
     <div
-      className="absolute left-4 top-4 z-30 w-[300px] border border-[#1e3a5f] bg-[#00000a]/85 p-5 fade-up"
-      style={{ backdropFilter: 'blur(4px)', boxShadow: '0 0 30px rgba(59,130,246,0.18)' }}
+      className="control-panel absolute left-4 top-4 z-30 w-[320px] border p-5 fade-up"
     >
       <button
         onClick={onBack}
@@ -70,7 +69,7 @@ export function RegionDetail({ region, onBack }: Props) {
         ← vue nationale
       </button>
 
-      <div className="t-label text-[var(--nuclear)]" style={{ filter: 'drop-shadow(0 0 5px #3b82f6)' }}>
+      <div className="t-label text-[var(--engie-blue-soft)]">
         {region.nom}
       </div>
       {info && <div className="t-label mt-1 text-[var(--text-muted)]">— {info.tag}</div>}
@@ -84,7 +83,7 @@ export function RegionDetail({ region, onBack }: Props) {
       {rec && (
         <>
           {/* solde import / export — le point clé */}
-          <div className="mt-5 border-y border-[#1e3a5f] py-3">
+          <div className="mt-5 border-y border-[var(--line-strong)] py-3">
             <div className="t-label text-[var(--text-muted)]">
               {exporte ? 'la région exporte' : 'la région importe'}
             </div>
@@ -92,7 +91,6 @@ export function RegionDetail({ region, onBack }: Props) {
               className="t-num mt-1 tabular-nums"
               style={{
                 color: exporte ? 'var(--wind)' : 'var(--alert-orange)',
-                filter: `drop-shadow(0 0 6px ${exporte ? '#22c55e' : '#f97316'})`,
               }}
             >
               {exporte ? '+' : '−'}
@@ -119,13 +117,12 @@ export function RegionDetail({ region, onBack }: Props) {
                       {mw.toLocaleString('fr-FR')} MW
                     </span>
                   </div>
-                  <div className="mt-1 h-1 bg-[#0d1f3c]">
+                  <div className="mt-1 h-1 bg-[var(--surface-2)]">
                     <div
                       className="gauge-fill h-full"
                       style={{
                         width: `${Math.min(100, p)}%`,
                         background: COLORS[s],
-                        boxShadow: muted ? 'none' : `0 0 6px ${COLORS[s]}`,
                       }}
                     />
                   </div>
@@ -143,7 +140,7 @@ export function RegionDetail({ region, onBack }: Props) {
                   <div key={c.nom} className="flex items-center gap-2">
                     <span
                       className="inline-block h-1.5 w-1.5 shrink-0"
-                      style={{ background: SOURCE_COLOR[c.type], boxShadow: `0 0 4px ${SOURCE_COLOR[c.type]}` }}
+                      style={{ background: SOURCE_COLOR[c.type] }}
                     />
                     <span className="t-label normal-case text-[var(--text-primary)]" style={{ letterSpacing: '0.04em' }}>
                       {c.nom}

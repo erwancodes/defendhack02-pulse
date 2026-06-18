@@ -3,22 +3,22 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { geoConicConformal, geoPath, geoContains } from 'd3-geo'
 
-const W = 600
+// viewBox paysage : remplit mieux les écrans larges et montre plus d'Europe.
+const W = 880
 const H = 700
-const PAD = 22
+// La France est fittée dans un rectangle CENTRAL → marge tout autour pour
+// afficher les pays voisins (immersion « France dans l'Europe »).
+const FR_RECT = [
+  [280, 145],
+  [600, 545],
+]
 
 const geo = JSON.parse(readFileSync(new URL('../regions.geojson', import.meta.url)))
 
 const projection = geoConicConformal()
   .rotate([-3, 0])
   .parallels([44, 49])
-  .fitExtent(
-    [
-      [PAD, PAD],
-      [W - PAD, H - PAD],
-    ],
-    geo,
-  )
+  .fitExtent(FR_RECT, geo)
 
 const path = geoPath(projection)
 const P = (lng, lat) => projection([lng, lat]).map((n) => Math.round(n * 10) / 10)
@@ -187,3 +187,121 @@ export const VOISINS: Record<string, string[]> = {
 
 writeFileSync(new URL('../src/lib/regions.ts', import.meta.url), out)
 console.log('wrote src/lib/regions.ts —', regions.length, 'regions,', CENTRALES.length, 'centrales')
+
+// ── Départements (même projection → alignés sur les régions) ──
+const depGeo = JSON.parse(readFileSync(new URL('../departements.geojson', import.meta.url)))
+
+const departements = depGeo.features
+  .map((f) => {
+    const [clng, clat] = geoCentroid(f)
+    const region = regionOf(clng, clat)
+    const d = path(f)
+    const c = path.centroid(f).map(r1)
+    const b = path.bounds(f)
+    const bbox = [b[0].map(r1), b[1].map(r1)]
+    return { code: f.properties.code, nom: f.properties.nom, region, d, label: c, bbox }
+  })
+  .filter((d) => d.region) // sécurité
+
+const depOut = `// AUTO-GÉNÉRÉ par scripts/gen-map.mjs — ne pas éditer à la main.
+// Départements métropolitains, projection Lambert conique (viewBox ${W}x${H}).
+import type { BBox } from './regions'
+
+export interface Departement {
+  code: string
+  nom: string
+  region: string
+  d: string
+  label: [number, number]
+  bbox: BBox
+}
+
+export const DEPARTEMENTS: Departement[] = ${JSON.stringify(departements, null, 2)
+    .replace(/"label": \[\s*([\d.-]+),\s*([\d.-]+)\s*\]/g, '"label": [$1, $2]')
+    .replace(/"bbox": \[\s*\[\s*([\d.-]+),\s*([\d.-]+)\s*\],\s*\[\s*([\d.-]+),\s*([\d.-]+)\s*\]\s*\]/g, '"bbox": [[$1, $2], [$3, $4]]')}
+`
+
+writeFileSync(new URL('../src/lib/departements.ts', import.meta.url), depOut)
+console.log('wrote src/lib/departements.ts —', departements.length, 'départements')
+
+// ── Europe (fond + ancres de flux), même projection ──────────
+const eu = JSON.parse(readFileSync(new URL('../europe.geojson', import.meta.url)))
+
+// Arrondit toutes les coordonnées du path à l'entier (fond → précision inutile).
+const roundD = (d) => (d ? d.replace(/-?\d+\.\d+/g, (m) => Math.round(Number(m))) : '')
+// Chevauche-t-il la zone visible (marge serrée — on ne garde que ce qui se voit) ?
+const near = (f) => {
+  const b = path.bounds(f)
+  return b[1][0] > -90 && b[0][0] < W + 90 && b[1][1] > -90 && b[0][1] < H + 90
+}
+
+// Décime un anneau (garde 1 point sur STEP) — fond flou, densité inutile.
+const STEP = 3
+const thinRing = (ring) => {
+  if (ring.length <= 8) return ring
+  const out = ring.filter((_, i) => i % STEP === 0)
+  if (out[out.length - 1] !== ring[ring.length - 1]) out.push(ring[ring.length - 1])
+  return out.length >= 4 ? out : ring
+}
+const thin = (f) => {
+  const g = f.geometry
+  if (!g) return f
+  const geom =
+    g.type === 'Polygon'
+      ? { type: 'Polygon', coordinates: g.coordinates.map(thinRing) }
+      : g.type === 'MultiPolygon'
+        ? { type: 'MultiPolygon', coordinates: g.coordinates.map((poly) => poly.map(thinRing)) }
+        : g
+  return { ...f, geometry: geom }
+}
+
+const countries = eu.features
+  .filter((f) => f.properties.NAME !== 'France' && near(f))
+  .map((f) => ({ name: f.properties.NAME, d: roundD(path(thin(f))) }))
+  .filter((c) => c.d.length > 0)
+
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n))
+const centroidOf = (name) => {
+  const f = eu.features.find((x) => x.properties.NAME === name)
+  if (!f) return null
+  const [x, y] = projection(geoCentroid(f))
+  return [Math.round(clamp(x, 46, 554)), Math.round(clamp(y, 46, 654))]
+}
+const mid = (a, b) => [Math.round((a[0] + b[0]) / 2), Math.round((a[1] + b[1]) / 2)]
+
+const flows = {
+  angleterre: centroidOf('United Kingdom'),
+  allemagne_belgique: mid(centroidOf('Germany'), centroidOf('Belgium')),
+  espagne: centroidOf('Spain'),
+  italie: centroidOf('Italy'),
+  suisse: centroidOf('Switzerland'),
+}
+const franceCentroid = projection(geoCentroid(geo)).map((n) => Math.round(n))
+
+const euOut = `// AUTO-GÉNÉRÉ par scripts/gen-map.mjs — ne pas éditer à la main.
+// Pays européens (fond d'immersion) + ancres de flux, même projection.
+
+export interface Pays {
+  name: string
+  d: string
+}
+
+export const EUROPE: Pays[] = [
+${countries.map((c) => `  { name: ${JSON.stringify(c.name)}, d: ${JSON.stringify(c.d)} },`).join('\n')}
+]
+
+// Centre de la France projeté (origine des flèches de flux).
+export const FRANCE_CENTROID: [number, number] = [${franceCentroid[0]}, ${franceCentroid[1]}]
+
+// Ancre (sur le pays voisin) de chaque flux d'échange.
+export const EUROPE_FLOWS: Record<string, [number, number]> = {
+  angleterre: [${flows.angleterre}],
+  allemagne_belgique: [${flows.allemagne_belgique}],
+  espagne: [${flows.espagne}],
+  italie: [${flows.italie}],
+  suisse: [${flows.suisse}],
+}
+`
+
+writeFileSync(new URL('../src/lib/europe.ts', import.meta.url), euOut)
+console.log('wrote src/lib/europe.ts —', countries.length, 'pays')

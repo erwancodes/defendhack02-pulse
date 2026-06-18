@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { fetchEcoMix, FALLBACK, type EcoMixRecord, type EnergySource } from '../lib/eco2mix'
+import { fetchEcoMix, fetchHistory, FALLBACK, type EcoMixRecord, type EnergySource } from '../lib/eco2mix'
 import { genVoix } from '../lib/voix'
+import { genVoixAI, AI_ENABLED } from '../lib/voixAI'
 import { simulate, type ScenarioId } from '../lib/scenarios'
-import { VOISINS, REGIONS, VIEWBOX, type RegionState, type BBox } from '../lib/regions'
+import { VOISINS, REGIONS, VIEWBOX, type RegionState, type BBox, type Centrale } from '../lib/regions'
+import { DEPARTEMENTS } from '../lib/departements'
+import { FRANCE_CENTROID } from '../lib/europe'
+import { electronDestination, type Dest } from '../lib/electron'
 import { REGION_INFO } from '../lib/regionInfo'
 
 import { FranceMap } from '../components/FranceMap'
@@ -12,28 +16,60 @@ import { ParticleCanvas, type View } from '../components/ParticleCanvas'
 import { EnergyGauges } from '../components/EnergyGauges'
 import { VoixReseau } from '../components/VoixReseau'
 import { IfSimulator } from '../components/IfSimulator'
+import { TimeMachine } from '../components/TimeMachine'
 import { BlackoutOverlay } from '../components/BlackoutOverlay'
+import { BorderFlows } from '../components/BorderFlows'
 import { RegionDetail } from '../components/RegionDetail'
+import { DepartmentDetail } from '../components/DepartmentDetail'
+import { Legend } from '../components/Legend'
+import { DidYouKnow } from '../components/DidYouKnow'
+import { BalanceGame } from '../components/BalanceGame'
+import { QuizGame } from '../components/QuizGame'
+import { ElectronJourney } from '../components/ElectronJourney'
+import { PersoImpact } from '../components/PersoImpact'
+import { TourGuide } from '../components/TourGuide'
+import { DiscoveryScore } from '../components/DiscoveryScore'
 import { SummaryScreen } from '../components/SummaryScreen'
+
+const FACETS: Record<string, string> = {
+  centrale: 'une centrale survolée',
+  region: 'une région explorée',
+  dept: 'un département ouvert',
+  scenario: 'un scénario « et si »',
+  timemachine: 'le rejeu des 24 h',
+  isolate: 'une source isolée',
+  legend: 'la clé de lecture',
+  electron: 'un électron suivi',
+  balance: "le jeu d'équilibre",
+  quiz: 'le quiz du mix',
+  perso: 'ton impact perso',
+  summary: 'le bilan du soir',
+}
+const TOTAL_FACETS = Object.keys(FACETS).length
 
 export const Route = createFileRoute('/')({ component: Home })
 
-const NATIONAL: View = { x: 0, y: 0, w: VIEWBOX.w, h: VIEWBOX.h }
+// Vue nationale centrée sur la France, au ratio EXACT du conteneur (aspect)
+// → la carte remplit toute la zone, aucun letterbox / espace vide.
+function nationalView(aspect: number): View {
+  const h = VIEWBOX.h
+  const w = Math.max(VIEWBOX.h * 0.6, h * aspect)
+  return { x: FRANCE_CENTROID[0] - w / 2, y: FRANCE_CENTROID[1] - h / 2, w, h }
+}
 
-// viewBox cible pour zoomer sur une région (ratio conservé → pas de distorsion)
-function viewForBbox(bbox: BBox): View {
+// viewBox cible pour zoomer sur une région, au ratio du conteneur (pas de distorsion)
+function viewForBbox(bbox: BBox, aspect: number): View {
   const [[x0, y0], [x1, y1]] = bbox
   const cx = (x0 + x1) / 2
   const cy = (y0 + y1) / 2
-  const A = VIEWBOX.w / VIEWBOX.h
   let bw = (x1 - x0) * 1.45
   let bh = (y1 - y0) * 1.45
-  if (bw / bh > A) bh = bw / A
-  else bw = bh * A
-  const minW = 175
-  if (bw < minW) {
-    bh = bh * (minW / bw)
-    bw = minW
+  if (bw / bh > aspect) bh = bw / aspect
+  else bw = bh * aspect
+  const minH = 200
+  if (bh < minH) {
+    bw = bw * (minH / bh)
+    bh = minH
   }
   return { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh }
 }
@@ -74,16 +110,56 @@ function Home() {
   const [regionStates, setRegionStates] = useState<Record<string, RegionState>>({})
   const [isolate, setIsolate] = useState<EnergySource | null>(null)
   const [voiceText, setVoiceText] = useState('')
+  const [voiceIA, setVoiceIA] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
-  const [focusedRegion, setFocusedRegion] = useState<string | null>(null)
-  const [view, setView] = useState<View>(NATIONAL)
+  const [game, setGame] = useState<'balance' | 'quiz' | null>(null)
+  const [gameMenu, setGameMenu] = useState(false)
+  const [electron, setElectron] = useState<{ centrale: Centrale; dest: Dest } | null>(null)
+  const electronTimer = useRef<number>(0)
+  const [tour, setTour] = useState<number | null>(null)
+  const tourTimer = useRef<number>(0)
+  const [discovered, setDiscovered] = useState<Set<string>>(new Set())
+  const [lastDiscovery, setLastDiscovery] = useState<string | null>(null)
+  const discoveredRef = useRef<Set<string>>(new Set())
 
-  const data = sim ?? live
+  const discover = useCallback((key: string) => {
+    if (discoveredRef.current.has(key)) return
+    discoveredRef.current.add(key)
+    setDiscovered(new Set(discoveredRef.current))
+    setLastDiscovery(FACETS[key] ?? key)
+  }, [])
+
+  const handleIsolate = useCallback(
+    (s: EnergySource | null) => {
+      setIsolate(s)
+      if (s) discover('isolate')
+    },
+    [discover],
+  )
+  const [focusedRegion, setFocusedRegion] = useState<string | null>(null)
+  const [focusedDept, setFocusedDept] = useState<string | null>(null)
+  // ratio réel de la zone carte (mesuré) → le viewBox l'épouse, zéro letterbox
+  const [boxAspect, setBoxAspect] = useState(VIEWBOX.w / VIEWBOX.h)
+  const mapBoxRef = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState<View>(() => nationalView(VIEWBOX.w / VIEWBOX.h))
+
+  const [timeMachine, setTimeMachine] = useState(false)
+  const [history, setHistory] = useState<EcoMixRecord[]>([])
+  const [histIndex, setHistIndex] = useState(0)
+  const [histLoading, setHistLoading] = useState(false)
+  const [playing, setPlaying] = useState(false)
+
+  // frame historique > simulation > live
+  const frame =
+    timeMachine && history.length > 0 ? history[Math.min(histIndex, history.length - 1)] : null
+  const data = frame ?? sim ?? live
+
   const timers = useRef<number[]>([])
   const lastInteract = useRef<number>(0)
-  const viewRef = useRef<View>(NATIONAL)
+  const voiceReq = useRef<number>(0)
+  const viewRef = useRef<View>(nationalView(VIEWBOX.w / VIEWBOX.h))
   const viewRaf = useRef<number>(0)
-  const viewTarget = useRef<View>(NATIONAL)
+  const viewTarget = useRef<View>(nationalView(VIEWBOX.w / VIEWBOX.h))
   const viewSnap = useRef<number>(0)
 
   // Anime le viewBox (tween rAF maison, sans lib).
@@ -117,32 +193,189 @@ function Home() {
     }, dur + 90)
   }, [])
 
+  // Pose un texte direct (invalide toute requête IA en cours).
+  const setVoice = useCallback((text: string) => {
+    voiceReq.current++
+    setVoiceIA(false)
+    setVoiceText(text)
+  }, [])
+
   const focusRegion = useCallback(
     (id: string) => {
       const r = REGIONS.find((x) => x.id === id)
       if (!r) return
       lastInteract.current = Date.now()
       setFocusedRegion(id)
-      setVoiceText(REGION_INFO[id]?.note ?? '')
-      animateView(viewForBbox(r.bbox))
+      setFocusedDept(null)
+      setVoice(REGION_INFO[id]?.note ?? '')
+      animateView(viewForBbox(r.bbox, boxAspect))
+      discover('region')
     },
-    [animateView],
+    [animateView, setVoice, boxAspect, discover],
   )
 
+  const focusDept = useCallback(
+    (code: string) => {
+      const d = DEPARTEMENTS.find((x) => x.code === code)
+      if (!d) return
+      lastInteract.current = Date.now()
+      setFocusedRegion(d.region)
+      setFocusedDept(code)
+      animateView(viewForBbox(d.bbox, boxAspect))
+      discover('dept')
+    },
+    [animateView, boxAspect, discover],
+  )
+
+  // Retour contextuel : département → région → national.
+  const goBack = useCallback(() => {
+    if (focusedDept) {
+      const d = DEPARTEMENTS.find((x) => x.code === focusedDept)
+      setFocusedDept(null)
+      const r = d && REGIONS.find((x) => x.id === d.region)
+      if (r) {
+        setVoice(REGION_INFO[r.id]?.note ?? '')
+        animateView(viewForBbox(r.bbox, boxAspect))
+      }
+    } else if (focusedRegion) {
+      setFocusedRegion(null)
+      animateView(nationalView(boxAspect))
+    }
+  }, [focusedDept, focusedRegion, animateView, setVoice, boxAspect])
+
+  const backToRegion = useCallback(() => goBack(), [goBack])
+
   const unfocus = useCallback(() => {
+    setFocusedDept(null)
     setFocusedRegion(null)
-    animateView(NATIONAL)
-  }, [animateView])
+    animateView(nationalView(boxAspect))
+  }, [animateView, boxAspect])
+
+  // « Suis un électron » : zoome sur le trajet centrale → ville.
+  const startElectron = useCallback(
+    (c: Centrale) => {
+      if (focusedRegion || focusedDept) return
+      clearTimeout(electronTimer.current)
+      const dest = electronDestination(c)
+      setElectron({ centrale: c, dest })
+      lastInteract.current = Date.now()
+      discover('electron')
+      const bbox: BBox = [
+        [Math.min(c.x, dest.x), Math.min(c.y, dest.y)],
+        [Math.max(c.x, dest.x), Math.max(c.y, dest.y)],
+      ]
+      animateView(viewForBbox(bbox, boxAspect))
+      electronTimer.current = window.setTimeout(() => {
+        setElectron(null)
+        animateView(nationalView(boxAspect))
+      }, 6500)
+    },
+    [animateView, boxAspect, focusedRegion, focusedDept, discover],
+  )
+
+  // ── Time machine (rejeu des dernières 24 h) ───────────────
+  const openTimeMachine = useCallback(() => {
+    // sort de tout mode en cours
+    clearTimers()
+    setSim(null)
+    setTitre(null)
+    setRegionStates({})
+    setFocusedRegion(null)
+    setFocusedDept(null)
+    animateView(nationalView(boxAspect))
+    setTimeMachine(true)
+    discover('timemachine')
+    setVoice(
+      'Vous remontez les dernières 24 heures du réseau. Regardez le solaire se lever, culminer à midi, puis s’éteindre.',
+    )
+    if (history.length === 0) {
+      setHistLoading(true)
+      fetchHistory().then((h) => {
+        setHistory(h)
+        setHistIndex(h.length - 1)
+        setHistLoading(false)
+        setPlaying(h.length > 1)
+      })
+    } else {
+      setPlaying(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animateView, history.length, boxAspect])
+
+  const closeTimeMachine = useCallback(() => {
+    setTimeMachine(false)
+    setPlaying(false)
+  }, [])
+
+  // avance automatique
+  useEffect(() => {
+    if (!timeMachine || !playing || history.length < 2) return
+    const id = setInterval(() => {
+      setHistIndex((i) => (i >= history.length - 1 ? 0 : i + 1))
+    }, 110)
+    return () => clearInterval(id)
+  }, [timeMachine, playing, history.length])
+
+  // Mesure le ratio réel de la zone carte (→ viewBox sans letterbox).
+  useEffect(() => {
+    const el = mapBoxRef.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) setBoxAspect(r.width / r.height)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Quand le ratio change (resize), recale la vue courante sans animation.
+  useEffect(() => {
+    let v: View
+    if (focusedDept) {
+      const d = DEPARTEMENTS.find((x) => x.code === focusedDept)
+      v = d ? viewForBbox(d.bbox, boxAspect) : nationalView(boxAspect)
+    } else if (focusedRegion) {
+      const r = REGIONS.find((x) => x.id === focusedRegion)
+      v = r ? viewForBbox(r.bbox, boxAspect) : nationalView(boxAspect)
+    } else {
+      v = nationalView(boxAspect)
+    }
+    cancelAnimationFrame(viewRaf.current)
+    viewRef.current = v
+    viewTarget.current = v
+    setView(v)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boxAspect])
 
   const clearTimers = () => {
     timers.current.forEach((t) => clearTimeout(t))
     timers.current = []
   }
 
-  // Voix : calcule + pose le texte à streamer.
+  // Voix locale instantanée (survols) — invalide l'IA en cours.
   const speak = useCallback(
     (action: string, src: EcoMixRecord) => {
+      setVoice(genVoix({ data: src, action }))
+    },
+    [setVoice],
+  )
+
+  // Voix « intelligente » : local immédiat, puis upgrade IA si dispo.
+  const speakSmart = useCallback(
+    (action: string | undefined, src: EcoMixRecord) => {
+      const id = ++voiceReq.current
+      setVoiceIA(false)
       setVoiceText(genVoix({ data: src, action }))
+      if (!AI_ENABLED) return
+      genVoixAI(src, action).then((ai) => {
+        // n'applique que si aucune autre voix n'a pris le relais entretemps
+        if (ai && voiceReq.current === id) {
+          setVoiceText(ai)
+          setVoiceIA(true)
+        }
+      })
     },
     [],
   )
@@ -153,20 +386,21 @@ function Home() {
       lastInteract.current = Date.now()
       if (action.startsWith('centrale:')) {
         speak(action, data)
-      } else if (action.startsWith('region:') && !focusedRegion) {
+        discover('centrale')
+      } else if (action.startsWith('region:') && !focusedRegion && !focusedDept) {
         // region:Nom:conso  → commentaire réseau contextualisé
         speak('', data)
       }
     },
-    [data, speak, focusedRegion],
+    [data, speak, focusedRegion, focusedDept, discover],
   )
 
-  // Commentaire réseau initial + idle toutes les 30s.
+  // Commentaire réseau initial + idle toutes les 30s (voix IA si dispo).
   useEffect(() => {
-    if (!voiceText) setVoiceText(genVoix({ data: live }))
+    if (!voiceText) speakSmart(undefined, live)
     const id = setInterval(() => {
-      if (Date.now() - lastInteract.current > 28_000 && !sim) {
-        setVoiceText(genVoix({ data: live }))
+      if (Date.now() - lastInteract.current > 28_000 && !sim && !timeMachine && !focusedRegion) {
+        speakSmart(undefined, live)
       }
     }, 30_000)
     return () => clearInterval(id)
@@ -180,8 +414,9 @@ function Home() {
       lastInteract.current = Date.now()
       const result = simulate(id, live)
       setSim(result.data)
-      // La voix décrit ce qui disparaît → on lui passe les données réelles.
-      setVoiceText(genVoix({ data: live, action: `scenario:${id}` }))
+      discover('scenario')
+      // La voix décrit ce qui disparaît (IA si dispo, sinon local).
+      speakSmart(`scenario:${id}`, live)
 
       if (result.region) {
         // 1. stress immédiat
@@ -221,24 +456,92 @@ function Home() {
     setSim(null)
     setTitre(null)
     setRegionStates({})
-    setVoiceText(genVoix({ data: live }))
-  }, [live])
+    setVoice(genVoix({ data: live }))
+  }, [live, setVoice])
+
+  // ── Visite guidée (90 s) — enchaîne caméra + scénario ─────
+  const TOUR: { dur: number; text: string; run: () => void }[] = [
+    {
+      dur: 8500,
+      text: "Bienvenue. Voici le réseau électrique français, en direct. Chaque point qui file, c'est de l'énergie qui circule en ce moment précis.",
+      run: () => { setIsolate(null); unfocus() },
+    },
+    {
+      dur: 9000,
+      text: 'En bleu, le nucléaire : à lui seul, il fournit la majorité du courant français — jour et nuit, presque sans carbone.',
+      run: () => handleIsolate('nucleaire'),
+    },
+    {
+      dur: 9000,
+      text: "Regarde les flèches aux frontières : la France exporte son électricité vers presque tous ses voisins. C'est la batterie de l'Europe.",
+      run: () => setIsolate(null),
+    },
+    {
+      dur: 10000,
+      text: "Chaque région a son visage. L'Auvergne-Rhône-Alpes, avec le Rhône et les Alpes, est la grande exportatrice du pays.",
+      run: () => focusRegion('ara'),
+    },
+    {
+      dur: 11000,
+      text: 'Et si on coupait tout le nucléaire ? Le réseau ne tiendrait pas une seconde. Regarde…',
+      run: () => { unfocus(); window.setTimeout(() => runScenario('no-nuclear'), 700) },
+    },
+    {
+      dur: 8000,
+      text: "Le réseau, c'est vivant : ça respire, ça circule, ça s'échange. Maintenant, à toi d'explorer.",
+      run: () => { unfocus(); resetSim() },
+    },
+  ]
+
+  const endTour = useCallback(() => {
+    clearTimeout(tourTimer.current)
+    setTour(null)
+    setIsolate(null)
+    unfocus()
+    resetSim()
+  }, [unfocus, resetSim])
+
+  const startTour = useCallback(() => {
+    closeTimeMachine()
+    setGame(null)
+    setGameMenu(false)
+    setElectron(null)
+    resetSim()
+    unfocus()
+    setIsolate(null)
+    setTour(0)
+  }, [closeTimeMachine, resetSim, unfocus])
+
+  // exécute l'étape courante + programme la suivante
+  useEffect(() => {
+    if (tour === null) return
+    TOUR[tour].run()
+    const last = tour >= TOUR.length - 1
+    tourTimer.current = window.setTimeout(() => {
+      if (last) endTour()
+      else setTour((t) => (t === null ? null : t + 1))
+    }, TOUR[tour].dur)
+    return () => clearTimeout(tourTimer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour])
 
   useEffect(() => () => clearTimers(), [])
 
-  // Échap → sortie de la vue régionale
+  // Échap → recule d'un niveau (département → région → national)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && focusedRegion) unfocus()
+      if (e.key === 'Escape' && (focusedRegion || focusedDept)) goBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [focusedRegion, unfocus])
+  }, [focusedRegion, focusedDept, goBack])
 
   useEffect(
     () => () => {
       cancelAnimationFrame(viewRaf.current)
       clearTimeout(viewSnap.current)
+      clearTimeout(electronTimer.current)
+      clearTimeout(tourTimer.current)
     },
     [],
   )
@@ -246,36 +549,118 @@ function Home() {
   const simActive = sim !== null
 
   return (
-    <div className="scanlines flex h-screen w-screen flex-col overflow-hidden bg-[var(--background)]">
+    <div className="control-room scanlines flex h-[100dvh] w-screen flex-col overflow-hidden bg-[var(--background)]">
       {/* ── Header ── */}
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-[#0d1f3c] px-4">
-        <div className="flex items-center gap-3">
-          <span className="t-title" style={{ opacity: 1, color: 'var(--nuclear)', filter: 'drop-shadow(0 0 6px #3b82f6)' }}>
+      <header className="control-header flex h-14 shrink-0 items-center justify-between border-b px-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="t-title" style={{ opacity: 1, fontSize: 15, color: 'var(--engie-blue-soft)' }}>
             pulse
           </span>
-          <span className="t-label text-[var(--text-muted)]">réseau électrique français</span>
+          <div className="hidden h-7 w-px bg-[var(--line-strong)] md:block" />
+          <div className="hidden min-w-0 md:block">
+            <div className="t-label text-[var(--text-primary)]">tour de contrôle énergie</div>
+            <div className="t-label mt-0.5 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.04em' }}>
+              réseau électrique français
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="t-label hidden text-[var(--text-muted)] sm:inline">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <span className="t-label mr-1 hidden text-[var(--text-muted)] lg:inline">
             données rte · {formatHeure(data.date_heure)}
           </span>
+
+          {/* jouer — CTA accentué (jaune) */}
+          <div className="relative">
+            <button
+              onClick={() => setGameMenu((o) => !o)}
+              className="nav-pill flex items-center gap-1.5"
+              style={{
+                borderColor: gameMenu || game ? 'var(--engie-blue)' : 'var(--line-strong)',
+                color: gameMenu || game ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
+                background: gameMenu || game ? 'rgba(0,110,182,0.2)' : undefined,
+              }}
+            >
+              <span style={{ fontSize: 8 }}>RUN</span> jouer
+            </button>
+            {gameMenu && (
+              <div className="control-panel absolute right-0 top-full z-50 mt-2 w-[258px] border p-2 fade-up">
+                <button
+                  onClick={() => { setGame('balance'); discover('balance'); setGameMenu(false) }}
+                  className="block w-full border border-transparent px-2 py-2 text-left transition-colors hover:border-[var(--line-strong)] hover:bg-[rgba(0,110,182,0.12)]"
+                >
+                  <span className="t-label text-[var(--text-primary)]">équilibre le réseau</span>
+                  <span className="t-label mt-0.5 block normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>équilibre offre & demande</span>
+                </button>
+                <button
+                  onClick={() => { setGame('quiz'); discover('quiz'); setGameMenu(false) }}
+                  className="mt-1 block w-full border border-transparent px-2 py-2 text-left transition-colors hover:border-[var(--line-strong)] hover:bg-[rgba(0,110,182,0.12)]"
+                >
+                  <span className="t-label text-[var(--text-primary)]">devine le mix</span>
+                  <span className="t-label mt-0.5 block normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>quiz éclair sur le direct</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* découvrir — CTA accentué (bleu) */}
           <button
-            onClick={() => setShowSummary(true)}
-            className="t-label text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+            onClick={() => (tour !== null ? endTour() : startTour())}
+            className="nav-pill flex items-center gap-1.5"
+            style={{
+              borderColor: tour !== null ? 'var(--nuclear)' : 'rgba(59,130,246,0.5)',
+              color: tour !== null ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
+              background: tour !== null ? 'rgba(0,110,182,0.2)' : undefined,
+            }}
+          >
+            <span style={{ fontSize: 9 }}>OPS</span> découvrir
+          </button>
+
+          {/* 24h */}
+          <button
+            onClick={() => (timeMachine ? closeTimeMachine() : openTimeMachine())}
+            className="nav-pill"
+            style={{
+              borderColor: timeMachine ? 'var(--nuclear)' : '#1e3a5f',
+              color: timeMachine ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
+              background: timeMachine ? 'rgba(0,110,182,0.2)' : undefined,
+            }}
+          >
+            24h
+          </button>
+
+          {/* résumé */}
+          <button
+            onClick={() => { setShowSummary(true); discover('summary') }}
+            className="nav-pill"
+            style={{ borderColor: '#1e3a5f', color: 'var(--text-primary)' }}
           >
             résumé
           </button>
-          <span className="t-label flex items-center gap-2 text-[var(--text-primary)]">
-            {focusedRegion ? 'vue régionale' : sim ? 'simulation' : 'live'}
+
+          {/* statut live */}
+          <span
+            className="t-label flex items-center gap-2 border px-2.5 py-2 text-[var(--text-primary)]"
+            style={{ borderColor: 'var(--line-strong)', background: 'rgba(0,110,182,0.08)' }}
+          >
+            {timeMachine
+              ? 'rejeu 24h'
+              : focusedDept
+                ? 'vue dép.'
+                : focusedRegion
+                  ? 'vue rég.'
+                  : sim
+                    ? 'simulation'
+                    : 'live'}
             <span
               className="live-dot inline-block h-1.5 w-1.5 rounded-full"
               style={{
-                background: focusedRegion
-                  ? 'var(--nuclear)'
-                  : sim
-                    ? 'var(--alert-orange)'
-                    : 'var(--alert-red)',
-                boxShadow: `0 0 6px ${focusedRegion ? 'var(--nuclear)' : sim ? 'var(--alert-orange)' : 'var(--alert-red)'}`,
+                background:
+                  timeMachine || focusedRegion || focusedDept
+                    ? 'var(--nuclear)'
+                    : sim
+                      ? 'var(--alert-orange)'
+                      : 'var(--alert-red)',
+                boxShadow: 'none',
               }}
             />
           </span>
@@ -287,52 +672,111 @@ function Home() {
         {/* Carte + particules */}
         <main
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
-          onDoubleClick={() => (focusedRegion ? unfocus() : resetSim())}
+          onDoubleClick={() => (focusedRegion || focusedDept ? goBack() : resetSim())}
         >
-          {/* boîte verrouillée au ratio de la carte → tooltips alignés au pixel */}
-          <div
-            className="relative h-full"
-            style={{ aspectRatio: '600 / 700', maxWidth: '100%' }}
-          >
+          {/* la carte remplit toute la zone ; le viewBox épouse le ratio mesuré */}
+          <div ref={mapBoxRef} className="relative h-full w-full">
             <FranceMap
               data={data}
               regionStates={regionStates}
               view={view}
               focusedRegion={focusedRegion}
+              focusedDept={focusedDept}
               onFocus={focusRegion}
+              onFocusDept={focusDept}
+              onElectron={startElectron}
               onVoice={onVoice}
             />
             <ParticleCanvas data={data} isolate={isolate} view={view} />
+            <BorderFlows
+              data={live}
+              view={view}
+              visible={!focusedRegion && !focusedDept && !timeMachine && !electron}
+            />
+            {electron && <ElectronJourney centrale={electron.centrale} dest={electron.dest} view={view} />}
             <BlackoutOverlay titre={titre} />
+
+            {/* Aides pédagogiques — ancrées sur la carte, au national uniquement */}
+            {!focusedRegion && !focusedDept && !timeMachine && !electron && tour === null && (
+              <>
+                <div className="absolute left-3 top-3 z-20">
+                  <Legend isolate={isolate} onIsolate={handleIsolate} onOpen={() => discover('legend')} />
+                </div>
+                <div className="absolute right-3 top-3 z-20">
+                  <DidYouKnow data={live} />
+                </div>
+                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
+                  <DiscoveryScore count={discovered.size} total={TOTAL_FACETS} last={lastDiscovery} />
+                </div>
+              </>
+            )}
+
+            {/* Visite guidée */}
+            {tour !== null && (
+              <TourGuide step={tour} total={TOUR.length} text={TOUR[tour].text} onSkip={endTour} />
+            )}
           </div>
 
-          {/* Détail régional (vue zoomée) */}
-          {focusedRegion &&
+          {/* Détail département (niveau le plus profond) */}
+          {focusedDept &&
+            (() => {
+              const d = DEPARTEMENTS.find((x) => x.code === focusedDept)
+              const r = d && REGIONS.find((x) => x.id === d.region)
+              return d && r ? (
+                <DepartmentDetail dept={d} regionNom={r.nom} onBack={backToRegion} />
+              ) : null
+            })()}
+
+          {/* Détail régional */}
+          {focusedRegion && !focusedDept &&
             (() => {
               const r = REGIONS.find((x) => x.id === focusedRegion)
               return r ? <RegionDetail region={r} onBack={unfocus} /> : null
             })()}
 
-          {/* Simulateur en bas à gauche (masqué en vue régionale) */}
-          {!focusedRegion && (
-            <div className="absolute bottom-4 left-4 z-20">
-              <IfSimulator onScenario={runScenario} onReset={resetSim} simActive={simActive} />
-            </div>
+          {/* Simulateur (bas-gauche) + impact perso (bas-droite) — au national */}
+          {!focusedRegion && !focusedDept && !timeMachine && !electron && tour === null && (
+            <>
+              <div className="absolute bottom-4 left-4 z-20">
+                <IfSimulator onScenario={runScenario} onReset={resetSim} simActive={simActive} />
+              </div>
+              <div className="absolute bottom-4 right-4 z-20">
+                <PersoImpact data={live} onUse={() => discover('perso')} />
+              </div>
+            </>
           )}
         </main>
 
         {/* Panneau jauges */}
-        <aside className="shrink-0 border-t border-[#0d1f3c] p-6 md:w-[360px] md:border-l md:border-t-0">
-          <EnergyGauges data={data} isolate={isolate} onIsolate={setIsolate} />
+        <aside className="control-sidebar shrink-0 border-t p-5 md:w-[390px] md:border-l md:border-t-0">
+          <EnergyGauges data={data} isolate={isolate} onIsolate={handleIsolate} />
         </aside>
       </div>
 
+      {/* ── Time machine ── */}
+      {timeMachine && (
+        <TimeMachine
+          history={history}
+          index={histIndex}
+          playing={playing}
+          loading={histLoading}
+          onIndex={(i) => {
+            setPlaying(false)
+            setHistIndex(i)
+          }}
+          onTogglePlay={() => setPlaying((p) => !p)}
+          onExit={closeTimeMachine}
+        />
+      )}
+
       {/* ── Voix du réseau ── */}
-      <footer className="flex min-h-[60px] shrink-0 items-center border-t border-[#0d1f3c] px-4 py-3">
-        <VoixReseau text={voiceText} />
+      <footer className="control-footer flex min-h-[66px] shrink-0 items-center border-t px-4 py-3">
+        <VoixReseau text={voiceText} ia={voiceIA} />
       </footer>
 
       {showSummary && <SummaryScreen data={data} onClose={() => setShowSummary(false)} />}
+      {game === 'balance' && <BalanceGame data={live} onClose={() => setGame(null)} />}
+      {game === 'quiz' && <QuizGame data={live} onClose={() => setGame(null)} />}
     </div>
   )
 }

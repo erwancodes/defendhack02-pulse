@@ -4,17 +4,25 @@
 
 /* ── PULSE — direction artistique ─────────────────────────── */
 :root {
-  --background: #00000a;
-  --grid-lines: #0d1f3c;
-  --nuclear: #3b82f6;
+  --background: #020816;
+  --surface-0: #041020;
+  --surface-1: #06182b;
+  --surface-2: #0a2238;
+  --grid-lines: #0b2947;
+  --line-strong: #174468;
+  --engie-blue: #00a6d6;
+  --engie-blue-deep: #006eb6;
+  --engie-blue-soft: #65d9ff;
+  --nuclear: #00a6d6;
   --wind: #22c55e;
   --hydro: #06b6d4;
-  --solar: #eab308;
+  --solar: #d8b33f;
   --gas: #f97316;
   --alert-orange: #f97316;
   --alert-red: #ef4444;
-  --text-primary: #e2e8f0;
-  --text-muted: #475569;
+  --text-primary: #e8f4ff;
+  --text-muted: #7a93aa;
+  --text-dim: #42647e;
 }
 
 * {
@@ -30,7 +38,9 @@ body,
 
 body {
   margin: 0;
-  background: var(--background);
+  background:
+    radial-gradient(circle at 42% 30%, rgba(0, 166, 214, 0.11), transparent 34%),
+    linear-gradient(180deg, #031126 0%, var(--background) 58%, #010713 100%);
   color: var(--text-primary);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   overflow: hidden;
@@ -51,20 +61,62 @@ body {
   z-index: 9999;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.03) 0px,
-    rgba(255, 255, 255, 0.03) 1px,
+    rgba(101, 217, 255, 0.025) 0px,
+    rgba(101, 217, 255, 0.025) 1px,
     transparent 1px,
     transparent 3px
   );
   mix-blend-mode: overlay;
 }
 
+.control-room {
+  position: relative;
+  isolation: isolate;
+}
+
+.control-room::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(0, 166, 214, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 166, 214, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 1) 0%, transparent 72%);
+}
+
+.control-header,
+.control-footer,
+.control-sidebar,
+.control-panel {
+  background: linear-gradient(180deg, rgba(6, 24, 43, 0.92), rgba(2, 8, 22, 0.82));
+  border-color: var(--line-strong);
+  box-shadow: inset 0 1px 0 rgba(101, 217, 255, 0.08);
+}
+
+.control-panel {
+  backdrop-filter: blur(7px);
+}
+
+.control-card {
+  border: 1px solid var(--line-strong);
+  background: rgba(4, 16, 32, 0.74);
+  box-shadow: inset 0 1px 0 rgba(101, 217, 255, 0.08);
+}
+
+.status-chip {
+  border: 1px solid var(--line-strong);
+  background: rgba(0, 110, 182, 0.08);
+}
+
 /* Glow helpers */
-.glow-nuclear { filter: drop-shadow(0 0 6px var(--nuclear)); }
-.glow-wind    { filter: drop-shadow(0 0 6px var(--wind)); }
-.glow-hydro   { filter: drop-shadow(0 0 6px var(--hydro)); }
-.glow-solar   { filter: drop-shadow(0 0 6px var(--solar)); }
-.glow-gas     { filter: drop-shadow(0 0 6px var(--gas)); }
+.glow-nuclear { filter: drop-shadow(0 0 5px rgba(0, 166, 214, 0.55)); }
+.glow-wind    { filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.45)); }
+.glow-hydro   { filter: drop-shadow(0 0 5px rgba(6, 182, 212, 0.45)); }
+.glow-solar   { filter: drop-shadow(0 0 5px rgba(216, 179, 63, 0.42)); }
+.glow-gas     { filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.42)); }
 
 /* Flicker blackout */
 @keyframes flicker {
@@ -101,12 +153,55 @@ body {
 /* Scrollbar discrète */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1e3a5f; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); }
 
 .map-cursor { cursor: crosshair; }
 
+/* Flux aux frontières : pointillés qui défilent vers le tip */
+@keyframes border-flow {
+  to { stroke-dashoffset: -20; }
+}
+.border-flow {
+  animation: border-flow 0.9s linear infinite;
+}
+
+/* Pastilles de la barre du haut (boutons visibles) */
+.nav-pill {
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--line-strong);
+  background: rgba(4, 16, 32, 0.72);
+  padding: 7px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(101, 217, 255, 0.08);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.nav-pill:hover {
+  background: rgba(0, 110, 182, 0.16);
+  border-color: var(--engie-blue);
+  color: var(--engie-blue-soft);
+}
+.nav-pill:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Sliders du jeu d'équilibriste */
+.game-slider { height: 4px; cursor: pointer; }
+.game-slider:focus-visible { outline: 1px solid var(--engie-blue); outline-offset: 4px; }
+.game-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px; border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(2, 8, 22, 0.9), 0 0 0 4px rgba(101, 217, 255, 0.16);
+}
+
 /* Typo helpers du PRD */
-.t-title  { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3em; opacity: 0.5; }
-.t-num    { font-size: 24px; font-weight: 700; }
-.t-label  { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+.t-title  { font-size: 11px; text-transform: uppercase; letter-spacing: 0.24em; opacity: 0.68; }
+.t-num    { font-size: 24px; font-weight: 800; letter-spacing: 0; }
+.t-label  { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
 .t-narration { font-size: 13px; line-height: 1.7; font-style: italic; }

@@ -6,9 +6,9 @@ const ORDER: EnergySource[] = ['nucleaire', 'eolien', 'hydraulique', 'solaire', 
 function Bar({ p, color }: { p: number; color: string }) {
   const filled = Math.round((Math.min(100, p) / 100) * 20)
   return (
-    <span className="tabular-nums" style={{ color, filter: `drop-shadow(0 0 4px ${color})` }}>
+    <span className="tabular-nums" style={{ color }}>
       {'█'.repeat(filled)}
-      <span style={{ color: '#0d1f3c', filter: 'none' }}>{'░'.repeat(20 - filled)}</span>
+      <span style={{ color: 'var(--surface-2)' }}>{'░'.repeat(20 - filled)}</span>
     </span>
   )
 }
@@ -23,11 +23,11 @@ export function SummaryScreen({ data, onClose }: Props) {
 
   return (
     <div
-      className="absolute inset-0 z-40 flex items-center justify-center bg-[#00000a] fade-up"
+      className="control-room absolute inset-0 z-40 flex items-center justify-center bg-[var(--background)] fade-up"
       onClick={onClose}
     >
-      <div className="w-full max-w-2xl px-8" onClick={(e) => e.stopPropagation()}>
-        <div className="t-label mb-8 text-[var(--text-muted)]">ce soir, la france a produit</div>
+      <div className="control-panel w-full max-w-2xl border p-8" onClick={(e) => e.stopPropagation()}>
+        <div className="t-label mb-8 text-[var(--engie-blue-soft)]">bilan réseau</div>
 
         <div className="flex flex-col gap-3" style={{ fontSize: 14 }}>
           {ORDER.map((s) => {
@@ -47,9 +47,9 @@ export function SummaryScreen({ data, onClose }: Props) {
           })}
         </div>
 
-        <div className="mt-10 border-t border-[#1e3a5f] pt-6">
+        <div className="mt-10 border-t border-[var(--line-strong)] pt-6">
           <div className="t-label text-[var(--text-muted)]">empreinte carbone</div>
-          <div className="mt-2 t-num" style={{ color: 'var(--wind)', filter: 'drop-shadow(0 0 8px #22c55e)' }}>
+          <div className="mt-2 t-num" style={{ color: 'var(--wind)' }}>
             {data.taux_co2} gCO₂/kWh
           </div>
           <div className="t-label mt-3 text-[var(--text-muted)]">
@@ -65,7 +65,7 @@ export function SummaryScreen({ data, onClose }: Props) {
 
         <button
           onClick={onClose}
-          className="t-label mt-10 border border-[#1e3a5f] px-4 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--nuclear)] hover:text-[var(--text-primary)]"
+          className="t-label mt-10 border border-[var(--line-strong)] px-4 py-2 text-[var(--text-muted)] transition-colors hover:border-[var(--nuclear)] hover:text-[var(--text-primary)]"
         >
           ← retour au réseau
         </button>
