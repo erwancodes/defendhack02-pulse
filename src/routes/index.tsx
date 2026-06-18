@@ -116,6 +116,7 @@ function Home() {
   const [voiceText, setVoiceText] = useState('')
   const [voiceIA, setVoiceIA] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  const [simpleMode, setSimpleMode] = useState(false)
   const [game, setGame] = useState<'balance' | 'quiz' | null>(null)
   const [gameMenu, setGameMenu] = useState(false)
   const [electron, setElectron] = useState<{ centrale: Centrale; dest: Dest } | null>(null)
@@ -513,32 +514,32 @@ function Home() {
   const TOUR: { dur: number; text: string; run: () => void }[] = [
     {
       dur: 8500,
-      text: "Bienvenue. Voici le réseau électrique français, en direct. Chaque point qui file, c'est de l'énergie qui circule en ce moment précis.",
+      text: `La France utilise ${data.consommation.toLocaleString('fr-FR')} MW maintenant. L'électricité ne se stocke presque pas: il faut produire au même moment que l'on consomme.`,
       run: () => { setIsolate(null); unfocus() },
     },
     {
       dur: 9000,
-      text: 'En bleu, le nucléaire : à lui seul, il fournit la majorité du courant français — jour et nuit, presque sans carbone.',
+      text: 'Le bleu, c est le socle stable: il tourne jour et nuit. Les autres couleurs complètent selon la météo, l heure et le besoin du pays.',
       run: () => handleIsolate('nucleaire'),
     },
     {
       dur: 9000,
-      text: "Regarde les flèches aux frontières : la France exporte son électricité vers presque tous ses voisins. C'est la batterie de l'Europe.",
+      text: "Regarde les flèches aux frontières: quand la France produit plus que son besoin, elle aide ses voisins. Quand il manque du courant, elle en reçoit.",
       run: () => setIsolate(null),
     },
     {
       dur: 10000,
-      text: "Chaque région a son visage. L'Auvergne-Rhône-Alpes, avec le Rhône et les Alpes, est la grande exportatrice du pays.",
+      text: "Chaque région a son rôle. Certaines produisent beaucoup, d'autres consomment surtout. Clique une région pour voir si elle donne ou reçoit de l'électricité.",
       run: () => focusRegion('ara'),
     },
     {
       dur: 11000,
-      text: 'Et si on coupait tout le nucléaire ? Le réseau ne tiendrait pas une seconde. Regarde…',
+      text: 'Maintenant, on enlève une grosse source. Le réseau doit rester équilibré immédiatement: sinon certaines zones passent en stress puis en blackout.',
       run: () => { unfocus(); window.setTimeout(() => runScenario('no-nuclear'), 700) },
     },
     {
       dur: 8000,
-      text: "Le réseau, c'est vivant : ça respire, ça circule, ça s'échange. Maintenant, à toi d'explorer.",
+      text: "Dernier déclic: ton impact dépend du moment. Recharger, chauffer ou lancer une machine ne pèse pas pareil selon le mix en direct.",
       run: () => { unfocus(); resetSim() },
     },
   ]
@@ -633,6 +634,18 @@ function Home() {
           {/* jouer — CTA accentué (jaune) */}
           <DemoControls data={data} />
 
+          <button
+            onClick={() => setSimpleMode((v) => !v)}
+            className="nav-pill"
+            style={{
+              borderColor: simpleMode ? 'var(--solar)' : '#1e3a5f',
+              color: simpleMode ? 'var(--solar)' : 'var(--text-primary)',
+              background: simpleMode ? 'rgba(216,179,63,0.14)' : undefined,
+            }}
+          >
+            mode simple
+          </button>
+
           <div className="relative">
             <button
               onClick={() => setGameMenu((o) => !o)}
@@ -643,7 +656,7 @@ function Home() {
                 background: gameMenu || game ? 'rgba(0,110,182,0.2)' : undefined,
               }}
             >
-              <span style={{ fontSize: 8 }}>RUN</span> jouer
+              jouer
             </button>
             {gameMenu && (
               <div className="control-panel absolute right-0 top-full z-50 mt-2 w-[258px] border p-2 fade-up">
@@ -675,7 +688,7 @@ function Home() {
               background: tour !== null ? 'rgba(0,110,182,0.2)' : undefined,
             }}
           >
-            <span style={{ fontSize: 9 }}>OPS</span> découvrir
+            visite guidée
           </button>
 
           {/* 24h */}
@@ -688,7 +701,7 @@ function Home() {
               background: timeMachine ? 'rgba(0,110,182,0.2)' : undefined,
             }}
           >
-            24h
+            voir la journée
           </button>
 
           {/* résumé */}
@@ -697,7 +710,7 @@ function Home() {
             className="nav-pill mobile-hide"
             style={{ borderColor: '#1e3a5f', color: 'var(--text-primary)' }}
           >
-            résumé
+            ce qu'il faut retenir
           </button>
 
           {/* statut live */}
@@ -785,7 +798,7 @@ function Home() {
 
             {!electron && (
               <div className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2">
-                <LiveHomesCounter data={data} />
+              <LiveHomesCounter data={data} simpleMode={simpleMode} />
               </div>
             )}
           </div>
@@ -829,7 +842,7 @@ function Home() {
 
         {/* Panneau jauges */}
         <aside className="control-sidebar shrink-0 border-t p-5 md:w-[390px] md:border-l md:border-t-0">
-          <EnergyGauges data={data} isolate={isolate} onIsolate={handleIsolate} />
+          <EnergyGauges data={data} isolate={isolate} onIsolate={handleIsolate} simpleMode={simpleMode} />
         </aside>
       </div>
 
@@ -854,7 +867,7 @@ function Home() {
         <VoixReseau text={voiceText} ia={voiceIA} />
       </footer>
 
-      {showSummary && <SummaryScreen data={data} onClose={() => setShowSummary(false)} />}
+      {showSummary && <SummaryScreen data={data} simpleMode={simpleMode} onClose={() => setShowSummary(false)} />}
       {game === 'balance' && <BalanceGame data={live} onClose={() => setGame(null)} />}
       {game === 'quiz' && <QuizGame data={live} onClose={() => setGame(null)} />}
     </div>

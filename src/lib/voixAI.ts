@@ -29,6 +29,11 @@ const SCENARIO_LABEL: Record<string, string> = {
   'no-nuclear': "L'utilisateur coupe tout le nucléaire. Commente la conséquence.",
   'all-renewable': "L'utilisateur passe le réseau en 100% renouvelable. Commente la conséquence.",
   'cold-wave': "L'utilisateur simule une vague de froid (-10°C). Commente la conséquence.",
+  'heat-wave': "L'utilisateur simule une canicule à 19h. Commente la conséquence.",
+  'no-wind': "L'utilisateur simule une chute brutale de l'éolien. Commente la conséquence.",
+  'no-solar-evening': "L'utilisateur simule la disparition du solaire pendant le pic du soir. Commente la conséquence.",
+  'border-closed': "L'utilisateur simule une perte des interconnexions européennes. Commente la conséquence.",
+  'cyber-brittany': "L'utilisateur simule un incident cyber qui isole la Bretagne. Commente la conséquence.",
   'disconnect-idf': "L'utilisateur déconnecte l'Île-de-France. Commente la conséquence.",
 }
 

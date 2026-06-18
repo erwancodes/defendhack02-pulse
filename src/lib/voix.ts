@@ -108,6 +108,16 @@ function commentaireScenario(action: string, data: EcoMixRecord): string {
       return `Tout en renouvelable : magnifique sur le papier. Mais sans vent ni soleil cette nuit, la production s'effondre. Le réseau vacille.`
     case 'cold-wave':
       return `Vague de froid, -10°C. La consommation bondit : chaque degré perdu, c'est 2 400 MW de plus à produire. Les marges fondent.`
+    case 'heat-wave':
+      return `Canicule à 19h. Les climatiseurs tirent sur le réseau pendant que le solaire baisse. Le gaz prend le relais, donc le CO₂ remonte.`
+    case 'no-wind':
+      return `Le vent tombe. L'éolien disparaît d'un coup : il faut compenser avec l'hydraulique et le gaz. Le réseau tient seulement si la réserve suffit.`
+    case 'no-solar-evening':
+      return `Pic du soir. Le solaire s'efface au moment où les usages remontent. Le réseau doit trouver une autre source immédiatement.`
+    case 'border-closed':
+      return `Les interconnexions européennes tombent. La France ne peut plus compter sur ses voisins : chaque MW doit être équilibré à l'intérieur du pays.`
+    case 'cyber-brittany':
+      return `Incident cyber sur la Bretagne. La région est isolée : ce n'est pas une panne de production, c'est une perte de pilotage du réseau.`
     case 'disconnect-idf': {
       const conso = Math.round(total * 0.19)
       return `L'Île-de-France déconnectée : ${conso.toLocaleString('fr-FR')} MW de demande coupés net. Douze millions de personnes dans l'obscurité.`

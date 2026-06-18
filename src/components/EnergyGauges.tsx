@@ -1,5 +1,6 @@
 import type { EcoMixRecord, EnergySource } from '../lib/eco2mix'
 import { SOURCE_COLOR, SOURCE_LABEL, pct, tension } from '../lib/eco2mix'
+import { balanceText, homesLabel, SIMPLE_SOURCE_ROLE } from '../lib/simpleMode'
 
 const TENSION_META = {
   tendu: { label: 'réseau sous tension', color: 'var(--alert-orange)' },
@@ -19,25 +20,31 @@ interface Props {
   data: EcoMixRecord
   isolate: EnergySource | null
   onIsolate: (s: EnergySource | null) => void
+  simpleMode?: boolean
 }
 
-export function EnergyGauges({ data, isolate, onIsolate }: Props) {
+export function EnergyGauges({ data, isolate, onIsolate, simpleMode = false }: Props) {
   const total = data.consommation || 1
   const co2 = data.taux_co2
   const tens = tension(data)
+  const balance = balanceText(data)
+  const balanceColor =
+    balance.tone === 'export' ? 'var(--wind)' : balance.tone === 'import' ? 'var(--alert-orange)' : 'var(--nuclear)'
 
   return (
     <div className="flex h-full flex-col gap-5">
       <div className="border-b border-[var(--line-strong)] pb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="t-label text-[var(--engie-blue-soft)]">mix national temps réel</div>
+            <div className="t-label text-[var(--engie-blue-soft)]">
+              {simpleMode ? "d'où vient le courant maintenant" : 'mix national temps réel'}
+            </div>
             <div className="t-label mt-1 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.03em' }}>
-              production par source · clic pour isoler
+              {simpleMode ? "chaque ligne explique le rôle d'une source" : 'production par source · clic pour isoler'}
             </div>
           </div>
           <div className="text-right">
-            <div className="t-label text-[var(--text-muted)]">demande</div>
+            <div className="t-label text-[var(--text-muted)]">{simpleMode ? 'besoin' : 'demande'}</div>
             <div className="t-num tabular-nums" style={{ fontSize: 18, color: 'var(--text-primary)' }}>
               {total.toLocaleString('fr-FR')}
             </div>
@@ -45,6 +52,38 @@ export function EnergyGauges({ data, isolate, onIsolate }: Props) {
           </div>
         </div>
       </div>
+
+      {simpleMode && (
+        <div className="border-b border-[var(--line-strong)] pb-4">
+          <div className="flex items-baseline justify-between">
+            <span className="t-label text-[var(--text-muted)]">besoin de la France</span>
+            <span className="t-num tabular-nums" style={{ fontSize: 17, color: 'var(--text-primary)' }}>
+              {homesLabel(balance.need)}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div className="h-1.5 bg-[var(--surface-2)]">
+              <div
+                className="h-full bg-[var(--nuclear)]"
+                style={{ width: `${Math.min(100, (balance.need / Math.max(balance.production, balance.need, 1)) * 100)}%` }}
+              />
+            </div>
+            <span className="t-label text-[var(--text-muted)]">vs</span>
+            <div className="h-1.5 bg-[var(--surface-2)]">
+              <div
+                className="h-full"
+                style={{
+                  width: `${Math.min(100, (balance.production / Math.max(balance.production, balance.need, 1)) * 100)}%`,
+                  background: balanceColor,
+                }}
+              />
+            </div>
+          </div>
+          <div className="t-label mt-2 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
+            {balance.label}
+          </div>
+        </div>
+      )}
 
       {ROWS.map(({ source, symbol }) => {
         const mw = data[source] ?? 0
@@ -98,6 +137,11 @@ export function EnergyGauges({ data, isolate, onIsolate }: Props) {
               </span>
               <span className="t-label w-6 shrink-0 text-[var(--text-muted)]">MW</span>
             </div>
+            {simpleMode && (
+              <div className="t-label mt-1 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
+                {SIMPLE_SOURCE_ROLE[source]} · {homesLabel(mw)}
+              </div>
+            )}
           </button>
         )
       })}
@@ -105,7 +149,9 @@ export function EnergyGauges({ data, isolate, onIsolate }: Props) {
       {/* CO2 */}
       <div className="mt-2 border-t border-[var(--line-strong)] pt-4">
         <div className="flex items-baseline justify-between">
-          <span className="t-label text-[var(--text-muted)]">empreinte carbone</span>
+          <span className="t-label text-[var(--text-muted)]">
+            {simpleMode ? 'pollution du courant' : 'empreinte carbone'}
+          </span>
           <span
             className="t-num tabular-nums"
             style={{
@@ -116,7 +162,9 @@ export function EnergyGauges({ data, isolate, onIsolate }: Props) {
             {co2}
           </span>
         </div>
-        <div className="t-label mt-1 text-right text-[var(--text-muted)]">gCO₂/kWh</div>
+        <div className="t-label mt-1 text-right text-[var(--text-muted)]">
+          {simpleMode ? 'plus bas = meilleur pour le climat' : 'gCO₂/kWh'}
+        </div>
       </div>
 
       {/* Tension réseau : réel vs prévision */}

@@ -4,9 +4,10 @@ import { foyers } from '../lib/eco2mix'
 
 interface Props {
   data: EcoMixRecord
+  simpleMode?: boolean
 }
 
-export function LiveHomesCounter({ data }: Props) {
+export function LiveHomesCounter({ data, simpleMode = false }: Props) {
   const target = foyers(data.consommation)
   const [value, setValue] = useState(target)
 
@@ -32,12 +33,16 @@ export function LiveHomesCounter({ data }: Props) {
 
   return (
     <div className="live-homes control-panel min-w-[250px] border px-4 py-3 text-center fade-up">
-      <div className="t-label text-[var(--engie-blue-soft)]">foyers alimentes maintenant</div>
+      <div className="t-label text-[var(--engie-blue-soft)]">
+        {simpleMode ? "ce que ça représente" : 'foyers alimentes maintenant'}
+      </div>
       <div className="live-homes-num tabular-nums">
         {value.toLocaleString('fr-FR')}
       </div>
       <div className="t-label text-[var(--text-muted)]">
-        estimation live depuis {data.consommation.toLocaleString('fr-FR')} MW
+        {simpleMode
+          ? `la France utilise ${data.consommation.toLocaleString('fr-FR')} MW en ce moment`
+          : `estimation live depuis ${data.consommation.toLocaleString('fr-FR')} MW`}
       </div>
     </div>
   )

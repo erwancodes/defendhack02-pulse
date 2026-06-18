@@ -1,5 +1,6 @@
 import type { EcoMixRecord, EnergySource } from '../lib/eco2mix'
 import { SOURCE_COLOR, SOURCE_LABEL, pct } from '../lib/eco2mix'
+import { balanceText, homesLabel, SIMPLE_SOURCE_ROLE } from '../lib/simpleMode'
 
 const ORDER: EnergySource[] = ['nucleaire', 'eolien', 'hydraulique', 'solaire', 'gaz']
 
@@ -15,11 +16,13 @@ function Bar({ p, color }: { p: number; color: string }) {
 
 interface Props {
   data: EcoMixRecord
+  simpleMode?: boolean
   onClose: () => void
 }
 
-export function SummaryScreen({ data, onClose }: Props) {
+export function SummaryScreen({ data, simpleMode = false, onClose }: Props) {
   const total = data.consommation || 1
+  const balance = balanceText(data)
 
   return (
     <div
@@ -27,7 +30,19 @@ export function SummaryScreen({ data, onClose }: Props) {
       onClick={onClose}
     >
       <div className="control-panel w-full max-w-2xl border p-8" onClick={(e) => e.stopPropagation()}>
-        <div className="t-label mb-8 text-[var(--engie-blue-soft)]">bilan réseau</div>
+        <div className="t-label mb-8 text-[var(--engie-blue-soft)]">
+          {simpleMode ? "ce qu'il faut retenir" : 'bilan réseau'}
+        </div>
+
+        {simpleMode && (
+          <div className="mb-8 border border-[var(--line-strong)] p-4">
+            <div className="t-label text-[var(--text-muted)]">lecture instantanee</div>
+            <div className="mt-2 t-narration not-italic text-[var(--text-primary)]" style={{ fontSize: 14 }}>
+              La France a besoin de {homesLabel(balance.need)}. Le reseau produit{' '}
+              {balance.production.toLocaleString('fr-FR')} MW. {balance.label}.
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3" style={{ fontSize: 14 }}>
           {ORDER.map((s) => {
@@ -42,6 +57,11 @@ export function SummaryScreen({ data, onClose }: Props) {
                 <span className="t-label text-[var(--text-primary)]">
                   {SOURCE_LABEL[s]} {muted && <span className="text-[var(--text-muted)]">(nuit)</span>}
                 </span>
+                {simpleMode && (
+                  <span className="t-label normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
+                    {SIMPLE_SOURCE_ROLE[s]}
+                  </span>
+                )}
               </div>
             )
           })}
@@ -58,9 +78,21 @@ export function SummaryScreen({ data, onClose }: Props) {
         </div>
 
         <div className="mt-12 t-narration text-[var(--text-primary)]">
-          tu savais déjà tout ça.
-          <br />
-          tu l'as vu battre pendant quelques minutes.
+          {simpleMode ? (
+            <>
+              1. L'électricité doit être produite au moment où on la consomme.
+              <br />
+              2. Certaines sources sont stables, d'autres dépendent de la météo.
+              <br />
+              3. Le bon mix équilibre sécurité, CO₂ bas et disponibilité.
+            </>
+          ) : (
+            <>
+              tu savais déjà tout ça.
+              <br />
+              tu l'as vu battre pendant quelques minutes.
+            </>
+          )}
         </div>
 
         <button
