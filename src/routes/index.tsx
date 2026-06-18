@@ -551,7 +551,7 @@ function Home() {
   return (
     <div className="control-room scanlines flex h-[100dvh] w-screen flex-col overflow-hidden bg-[var(--background)]">
       {/* ── Header ── */}
-      <header className="control-header flex h-14 shrink-0 items-center justify-between border-b px-4">
+      <header className="control-header relative z-50 flex h-14 shrink-0 items-center justify-between overflow-visible border-b px-4">
         <div className="flex min-w-0 items-center gap-4">
           <span className="t-title" style={{ opacity: 1, fontSize: 15, color: 'var(--engie-blue-soft)' }}>
             pulse
@@ -564,7 +564,7 @@ function Home() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="flex items-center gap-2 overflow-visible">
           <span className="t-label mr-1 hidden text-[var(--text-muted)] lg:inline">
             données rte · {formatHeure(data.date_heure)}
           </span>
