@@ -60,7 +60,7 @@ export function Legend({ isolate, onIsolate, onOpen }: Props) {
               title={e.phrase}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <span className="legend-swatch" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
+                <LegendMarker source={e.source} color={color} />
                 <span className="t-label truncate" style={{ color }}>
                   {e.label}
                 </span>
@@ -70,5 +70,46 @@ export function Legend({ isolate, onIsolate, onOpen }: Props) {
         })}
       </div>
     </div>
+  )
+}
+
+function LegendMarker({ source, color }: { source: EnergySource; color: string }) {
+  if (source === 'nucleaire') {
+    return (
+      <span className="legend-marker legend-marker-hex" style={{ borderColor: 'rgba(232,244,255,0.78)' }}>
+        <span className="legend-marker-ring" style={{ borderColor: color }} />
+        <span className="legend-marker-dot" style={{ background: color }} />
+      </span>
+    )
+  }
+
+  if (source === 'eolien') {
+    return (
+      <span className="legend-marker legend-marker-triangle" style={{ borderBottomColor: 'rgba(232,244,255,0.78)' }}>
+        <span style={{ background: color }} />
+      </span>
+    )
+  }
+
+  if (source === 'hydraulique') {
+    return (
+      <span className="legend-marker legend-marker-drop" style={{ borderColor: 'rgba(232,244,255,0.78)' }}>
+        <span style={{ borderColor: color }} />
+      </span>
+    )
+  }
+
+  if (source === 'solaire') {
+    return (
+      <span className="legend-marker legend-marker-diamond" style={{ borderColor: 'rgba(232,244,255,0.78)' }}>
+        <span style={{ background: color }} />
+      </span>
+    )
+  }
+
+  return (
+    <span className="legend-marker legend-marker-square" style={{ borderColor: 'rgba(232,244,255,0.78)' }}>
+      <span style={{ background: color }} />
+    </span>
   )
 }

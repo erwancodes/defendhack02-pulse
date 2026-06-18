@@ -244,6 +244,73 @@ body {
   height: 9px;
   flex: 0 0 auto;
 }
+.legend-marker {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  background: #041020;
+}
+.legend-marker-hex {
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  border: 1px solid;
+}
+.legend-marker-ring {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 1px solid;
+  border-radius: 999px;
+}
+.legend-marker-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+}
+.legend-marker-triangle {
+  width: 0;
+  height: 0;
+  border-right: 8px solid transparent;
+  border-bottom: 15px solid;
+  border-left: 8px solid transparent;
+  background: transparent;
+}
+.legend-marker-triangle span {
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  width: 2px;
+  height: 6px;
+}
+.legend-marker-drop {
+  border: 1px solid;
+  border-radius: 70% 70% 70% 0;
+  transform: rotate(-45deg);
+}
+.legend-marker-drop span {
+  width: 8px;
+  border-top: 1px solid;
+  transform: rotate(45deg);
+}
+.legend-marker-diamond {
+  border: 1px solid;
+  transform: rotate(45deg);
+}
+.legend-marker-diamond span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+.legend-marker-square {
+  border: 1px solid;
+}
+.legend-marker-square span {
+  width: 7px;
+  height: 7px;
+}
 
 .live-homes {
   background:

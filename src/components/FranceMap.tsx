@@ -16,6 +16,7 @@ import type { MajorCity } from '../lib/cities'
 import type { View } from './ParticleCanvas'
 
 const VB_H = VIEWBOX.h
+const MARKER_STROKE = 'rgba(232,244,255,0.88)'
 
 function regionFill(state: RegionState): { fill: string; stroke: string; cls: string } {
   switch (state) {
@@ -222,40 +223,43 @@ export function FranceMap({
         {CENTRALES.map((c) => {
           const color = SOURCE_COLOR[c.type as EnergySource]
           const z = view.h / VB_H // <1 quand on est zoomé
-          const dur = Math.max(1.1, 3.4 - c.mw / 2000)
           const active = hoverCentrale?.nom === c.nom
           const dimmed = focusedRegion !== null && c.region !== focusedRegion
+          const size = (5.2 + Math.min(c.mw, 5600) / 1650) * z
           return (
-            <g key={c.nom} style={{ opacity: dimmed ? 0.18 : 1, transition: 'opacity 0.4s ease' }}>
+            <g
+              key={c.nom}
+              style={{
+                opacity: dimmed ? 0.18 : 1,
+                cursor: 'pointer',
+                transition: 'opacity 0.4s ease',
+              }}
+              onMouseEnter={() => {
+                setHoverCentrale(c)
+                onVoice(`centrale:${c.nom}:${c.type}:${c.mw}`)
+              }}
+              onMouseLeave={() => setHoverCentrale((p) => (p?.nom === c.nom ? null : p))}
+              onClick={() => onElectron(c)}
+            >
               {active && (
                 <circle
                   cx={c.x}
                   cy={c.y}
-                  r={14 * z}
+                  r={size + 5.5 * z}
                   fill="none"
                   stroke={color}
-                  strokeWidth={0.8 * z}
-                  opacity={0.5}
-                  style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+                  strokeWidth={1 * z}
+                  opacity={0.72}
                 />
               )}
-              <circle
-                cx={c.x}
-                cy={c.y}
-                r={(active ? 9 : 5) * z}
-                fill={color}
-                opacity={0.9}
-                style={{
-                  filter: `drop-shadow(0 0 ${active ? 10 : 5}px ${color})`,
-                  animation: `pulse-centrale ${dur}s ease-in-out infinite`,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={() => {
-                  setHoverCentrale(c)
-                  onVoice(`centrale:${c.nom}:${c.type}:${c.mw}`)
-                }}
-                onMouseLeave={() => setHoverCentrale((p) => (p?.nom === c.nom ? null : p))}
-                onClick={() => onElectron(c)}
+              <PlantMarker
+                x={c.x}
+                y={c.y}
+                size={active ? size * 1.16 : size}
+                z={z}
+                type={c.type}
+                color={color}
+                active={active}
               />
             </g>
           )
@@ -319,6 +323,115 @@ export function FranceMap({
         })()}
     </div>
   )
+}
+
+function PlantMarker({
+  x,
+  y,
+  size,
+  z,
+  type,
+  color,
+  active,
+}: {
+  x: number
+  y: number
+  size: number
+  z: number
+  type: EnergySource
+  color: string
+  active: boolean
+}) {
+  const strokeWidth = (active ? 1.4 : 1.1) * z
+  const core = '#041020'
+  const opacity = active ? 1 : 0.94
+  const transition = 'opacity 0.2s ease'
+
+  if (type === 'nucleaire') {
+    return (
+      <g opacity={opacity} style={{ transition }}>
+        <polygon points={hexPoints(x, y, size)} fill={core} stroke={MARKER_STROKE} strokeWidth={strokeWidth} />
+        <circle cx={x} cy={y} r={size * 0.56} fill="none" stroke={color} strokeWidth={strokeWidth} />
+        <circle cx={x} cy={y} r={size * 0.22} fill={color} />
+      </g>
+    )
+  }
+
+  if (type === 'eolien') {
+    return (
+      <g opacity={opacity} style={{ transition }}>
+        <polygon
+          points={`${x},${y - size} ${x + size * 0.88},${y + size * 0.5} ${x - size * 0.88},${y + size * 0.5}`}
+          fill={core}
+          stroke={MARKER_STROKE}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+        />
+        <line x1={x} y1={y - size * 0.42} x2={x} y2={y + size * 0.48} stroke={color} strokeWidth={strokeWidth} />
+        <line x1={x - size * 0.42} y1={y + size * 0.1} x2={x + size * 0.42} y2={y + size * 0.1} stroke={color} strokeWidth={strokeWidth} />
+      </g>
+    )
+  }
+
+  if (type === 'hydraulique') {
+    return (
+      <g opacity={opacity} style={{ transition }}>
+        <path
+          d={`M${x} ${y - size} C${x + size * 0.9} ${y - size * 0.1} ${x + size * 0.58} ${y + size} ${x} ${y + size} C${x - size * 0.58} ${y + size} ${x - size * 0.9} ${y - size * 0.1} ${x} ${y - size}Z`}
+          fill={core}
+          stroke={MARKER_STROKE}
+          strokeWidth={strokeWidth}
+        />
+        <path
+          d={`M${x - size * 0.46} ${y + size * 0.18} Q${x} ${y - size * 0.12} ${x + size * 0.46} ${y + size * 0.18}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      </g>
+    )
+  }
+
+  if (type === 'solaire') {
+    return (
+      <g opacity={opacity} style={{ transition }}>
+        <rect
+          x={x - size * 0.82}
+          y={y - size * 0.82}
+          width={size * 1.64}
+          height={size * 1.64}
+          fill={core}
+          stroke={MARKER_STROKE}
+          strokeWidth={strokeWidth}
+          transform={`rotate(45 ${x} ${y})`}
+        />
+        <circle cx={x} cy={y} r={size * 0.36} fill={color} />
+      </g>
+    )
+  }
+
+  return (
+    <g opacity={opacity} style={{ transition }}>
+      <rect
+        x={x - size * 0.75}
+        y={y - size * 0.75}
+        width={size * 1.5}
+        height={size * 1.5}
+        fill={core}
+        stroke={MARKER_STROKE}
+        strokeWidth={strokeWidth}
+      />
+      <rect x={x - size * 0.34} y={y - size * 0.34} width={size * 0.68} height={size * 0.68} fill={color} />
+    </g>
+  )
+}
+
+function hexPoints(x: number, y: number, r: number) {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = (Math.PI / 3) * i + Math.PI / 6
+    return `${x + Math.cos(a) * r},${y + Math.sin(a) * r}`
+  }).join(' ')
 }
 
 function Tooltip({

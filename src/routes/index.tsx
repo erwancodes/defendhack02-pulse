@@ -648,7 +648,7 @@ function Home() {
               background: showQuestionIA ? 'rgba(0,110,182,0.2)' : undefined,
             }}
           >
-            question IA
+            appel IA
           </button>
 
           <div className="relative">

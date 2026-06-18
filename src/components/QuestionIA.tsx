@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { EcoMixRecord } from '../lib/eco2mix'
 
 interface Props {
@@ -6,74 +6,143 @@ interface Props {
   onClose: () => void
 }
 
-const EXAMPLES = [
-  'Pourquoi le nucléaire est important maintenant ?',
-  'Est-ce que le réseau est sous tension ?',
-  'Pourquoi le solaire baisse le soir ?',
-]
+type CallState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal: boolean
+  readonly 0: { readonly transcript: string }
+}
+
+interface SpeechRecognitionEventLike {
+  readonly results: {
+    readonly length: number
+    readonly [index: number]: SpeechRecognitionResultLike
+  }
+}
+
+interface SpeechRecognitionLike {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type SpeechWindow = typeof window & {
+  SpeechRecognition?: new () => SpeechRecognitionLike
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike
+}
 
 export function QuestionIA({ data, onClose }: Props) {
-  const [question, setQuestion] = useState(EXAMPLES[0])
-  const [answer, setAnswer] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [audioStatus, setAudioStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
+  const [state, setState] = useState<CallState>('idle')
+  const [lastQuestion, setLastQuestion] = useState('')
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
 
-  const ask = async () => {
-    const q = question.trim()
-    if (!q || loading) return
-    setLoading(true)
-    setAnswer('')
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    audioRef.current?.pause()
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
+  }, [])
+
+  const askAndSpeak = async (question: string) => {
+    setState('thinking')
     try {
-      const res = await fetch('/api/ask', {
+      const askRes = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, question: q }),
+        body: JSON.stringify({ ...data, question }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setAnswer(typeof json.answer === 'string' ? json.answer : '')
-    } catch {
-      setAnswer("Je n'arrive pas à joindre l'IA. Les données live restent visibles sur la carte.")
-    } finally {
-      setLoading(false)
-    }
-  }
+      if (!askRes.ok) throw new Error(`ask ${askRes.status}`)
+      const askJson = await askRes.json()
+      const answer = typeof askJson.answer === 'string' ? askJson.answer.trim() : ''
+      if (!answer) throw new Error('empty answer')
 
-  const playAnswer = async () => {
-    if (!answer.trim() || audioStatus === 'loading') return
-    setAudioStatus('loading')
-    try {
-      const res = await fetch('/api/tts', {
+      const ttsRes = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: answer }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const blob = await res.blob()
+      if (!ttsRes.ok) throw new Error(`tts ${ttsRes.status}`)
+      const blob = await ttsRes.blob()
+
+      audioRef.current?.pause()
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
+
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      setAudioStatus('playing')
+      audioRef.current = audio
+      audioUrlRef.current = url
+      setState('speaking')
       audio.onended = () => {
         URL.revokeObjectURL(url)
-        setAudioStatus('idle')
+        if (audioUrlRef.current === url) audioUrlRef.current = null
+        setState('idle')
       }
-      audio.onerror = () => {
-        URL.revokeObjectURL(url)
-        setAudioStatus('error')
-      }
+      audio.onerror = () => setState('error')
       await audio.play()
     } catch {
-      setAudioStatus('error')
+      setState('error')
     }
   }
 
+  const startListening = () => {
+    if (state === 'listening' || state === 'thinking') return
+    const SpeechCtor = (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition
+    if (!SpeechCtor) {
+      setState('error')
+      return
+    }
+
+    audioRef.current?.pause()
+    const recognition = new SpeechCtor()
+    recognition.lang = 'fr-FR'
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
+    recognitionRef.current = recognition
+    setLastQuestion('')
+    setState('listening')
+
+    recognition.onresult = (event) => {
+      let transcript = ''
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result?.isFinal) transcript += result[0].transcript
+      }
+      const question = transcript.trim()
+      if (!question) {
+        setState('idle')
+        return
+      }
+      setLastQuestion(question)
+      void askAndSpeak(question)
+    }
+    recognition.onerror = () => setState('error')
+    recognition.onend = () => {
+      setState((current) => (current === 'listening' ? 'idle' : current))
+    }
+    recognition.start()
+  }
+
+  const stop = () => {
+    recognitionRef.current?.stop()
+    audioRef.current?.pause()
+    setState('idle')
+  }
+
   return (
-    <div className="control-panel absolute right-4 top-20 z-50 w-[430px] max-w-[calc(100vw-2rem)] border p-4 fade-up">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="control-panel absolute right-4 top-20 z-50 w-[360px] max-w-[calc(100vw-2rem)] border p-5 text-center fade-up">
+      <div className="mb-4 flex items-center justify-between gap-3 text-left">
         <div>
-          <div className="t-label text-[var(--engie-blue-soft)]">question IA</div>
+          <div className="t-label text-[var(--engie-blue-soft)]">appel IA</div>
           <div className="t-label mt-1 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.03em' }}>
-            pose une question sur le réseau français
+            conversation vocale sur le réseau
           </div>
         </div>
         <button onClick={onClose} className="t-label text-[var(--text-muted)] hover:text-[var(--text-primary)]">
@@ -81,58 +150,48 @@ export function QuestionIA({ data, onClose }: Props) {
         </button>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        {EXAMPLES.map((ex) => (
-          <button
-            key={ex}
-            onClick={() => setQuestion(ex)}
-            className="t-label border border-[var(--line-strong)] px-2 py-1 normal-case text-[var(--text-muted)] hover:border-[var(--nuclear)] hover:text-[var(--text-primary)]"
-            style={{ letterSpacing: '0.02em' }}
-          >
-            {ex}
-          </button>
-        ))}
+      <button
+        onClick={state === 'listening' || state === 'speaking' ? stop : startListening}
+        className="mx-auto flex h-28 w-28 items-center justify-center rounded-full border text-[var(--text-primary)] transition-colors"
+        style={{
+          borderColor: state === 'listening' ? 'var(--alert-red)' : state === 'speaking' ? 'var(--wind)' : 'var(--nuclear)',
+          background:
+            state === 'listening'
+              ? 'rgba(239,68,68,0.16)'
+              : state === 'speaking'
+                ? 'rgba(34,197,94,0.14)'
+                : 'rgba(0,166,214,0.12)',
+        }}
+      >
+        <span className="t-label" style={{ fontSize: 12 }}>
+          {buttonLabel(state)}
+        </span>
+      </button>
+
+      <div className="t-label mt-5 text-[var(--text-muted)]" style={{ minHeight: 18 }}>
+        {statusLabel(state)}
       </div>
-
-      <textarea
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        className="min-h-24 w-full resize-none border border-[var(--line-strong)] bg-[rgba(2,8,22,0.92)] p-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--nuclear)]"
-        placeholder="Ex: Pourquoi la France exporte de l'électricité ?"
-      />
-
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          onClick={ask}
-          disabled={loading || !question.trim()}
-          className="nav-pill"
-          style={{
-            borderColor: loading ? 'var(--line-strong)' : 'var(--nuclear)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {loading ? 'analyse...' : 'demander'}
-        </button>
-        {answer && (
-          <button
-            onClick={playAnswer}
-            disabled={audioStatus === 'loading'}
-            className="t-label border border-[var(--line-strong)] px-3 py-2 text-[var(--text-primary)] hover:border-[var(--nuclear)] disabled:opacity-50"
-          >
-            {audioStatus === 'loading' ? 'audio...' : audioStatus === 'playing' ? 'lecture' : 'écouter'}
-          </button>
-        )}
-      </div>
-
-      {answer && (
-        <div className="mt-4 border-t border-[var(--line-strong)] pt-4">
-          <div className="t-label mb-2 text-[var(--text-muted)]">réponse</div>
-          <p className="t-narration not-italic text-[var(--text-primary)]" style={{ fontSize: 14, lineHeight: 1.6 }}>
-            {answer}
-          </p>
+      {lastQuestion && (
+        <div className="t-label mt-3 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
+          question reçue
         </div>
       )}
     </div>
   )
+}
+
+function buttonLabel(state: CallState): string {
+  if (state === 'listening') return 'stop'
+  if (state === 'thinking') return '...'
+  if (state === 'speaking') return 'stop'
+  return 'parler'
+}
+
+function statusLabel(state: CallState): string {
+  if (state === 'listening') return 'je t écoute'
+  if (state === 'thinking') return 'analyse du réseau'
+  if (state === 'speaking') return 'réponse audio'
+  if (state === 'error') return 'micro ou IA indisponible'
+  return 'appuie puis pose ta question'
 }
 
