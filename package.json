@@ -19,6 +19,7 @@
     "@tanstack/react-router": "latest",
     "@tanstack/react-router-devtools": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "@vercel/analytics": "^2.0.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.545.0",
     "react": "^19.2.0",
