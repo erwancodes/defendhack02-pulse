@@ -12,6 +12,7 @@ export interface Particle {
   speed: number
   color: string
   size: number
+  trailWidth: number
   opacity: number
   source: EnergySource
 }
@@ -32,8 +33,15 @@ function pickLine(source: EnergySource) {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-function spawn(source: EnergySource): Particle {
+function sourceLineCount(source: EnergySource): number {
+  return Math.max(1, LIGNES.filter((l) => l.type === source).length)
+}
+
+function spawn(source: EnergySource, data: EcoMixRecord): Particle {
   const line = pickLine(source)
+  const sourceMw = data[source] ?? 0
+  const lineMw = sourceMw / sourceLineCount(source)
+  const power = Math.sqrt(Math.max(250, lineMw))
   return {
     fromX: line.from[0],
     fromY: line.from[1],
@@ -43,6 +51,7 @@ function spawn(source: EnergySource): Particle {
     speed: 0.0015 + Math.random() * 0.0035,
     color: SOURCE_COLOR[source],
     size: 1.5 + Math.random() * 1.5,
+    trailWidth: 0.8 + Math.min(4.2, power / 18),
     opacity: 0.55 + Math.random() * 0.45,
     source,
   }
@@ -53,11 +62,11 @@ export function buildParticles(data: EcoMixRecord): Particle[] {
   const particles: Particle[] = []
   for (const source of PARTICLE_SOURCES) {
     const count = getParticleCount(source, data)
-    for (let i = 0; i < count; i++) particles.push(spawn(source))
+    for (let i = 0; i < count; i++) particles.push(spawn(source, data))
   }
   // Toujours quelques particules pour que la carte ne soit jamais morte.
   if (particles.length < 12) {
-    for (let i = 0; i < 12; i++) particles.push(spawn('nucleaire'))
+    for (let i = 0; i < 12; i++) particles.push(spawn('nucleaire', data))
   }
   return particles
 }
@@ -66,12 +75,12 @@ export interface RenderOptions {
   isolate: EnergySource | null // n'affiche qu'une source
 }
 
-export function step(particles: Particle[]): void {
+export function step(particles: Particle[], data: EcoMixRecord): void {
   for (const p of particles) {
     p.progress += p.speed
     if (p.progress >= 1) {
       // Renaît sur une nouvelle ligne de la même source.
-      const fresh = spawn(p.source)
+      const fresh = spawn(p.source, data)
       Object.assign(p, fresh, { progress: 0 })
     }
   }

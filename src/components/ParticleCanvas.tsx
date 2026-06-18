@@ -18,12 +18,14 @@ interface Props {
 export function ParticleCanvas({ data, isolate, view }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
+  const dataRef = useRef<EcoMixRecord>(data)
   const isolateRef = useRef<EnergySource | null>(isolate)
   const viewRef = useRef<View>(view)
   const rafRef = useRef<number>(0)
 
   // Reconstruit le jeu de particules quand le mix change.
   useEffect(() => {
+    dataRef.current = data
     particlesRef.current = buildParticles(data)
   }, [data])
 
@@ -65,7 +67,7 @@ export function ParticleCanvas({ data, isolate, view }: Props) {
       const particles = particlesRef.current
       const iso = isolateRef.current
 
-      step(particles)
+      step(particles, dataRef.current)
       ctx.clearRect(0, 0, w, h)
 
       for (const p of particles) {
@@ -76,7 +78,7 @@ export function ParticleCanvas({ data, isolate, view }: Props) {
         const x = px(p.fromX + dx * t)
         const y = py(p.fromY + dy * t)
         // point de queue (légèrement en arrière sur la trajectoire)
-        const tt = Math.max(0, t - 0.05)
+        const tt = Math.max(0, t - (0.035 + Math.min(0.11, p.trailWidth / 60)))
         const tx = px(p.fromX + dx * tt)
         const ty = py(p.fromY + dy * tt)
 
@@ -92,9 +94,9 @@ export function ParticleCanvas({ data, isolate, view }: Props) {
         ctx.moveTo(tx, ty)
         ctx.lineTo(x, y)
         ctx.strokeStyle = p.color
-        ctx.lineWidth = p.size * dpr * 0.9
+        ctx.lineWidth = p.trailWidth * dpr
         ctx.lineCap = 'round'
-        ctx.globalAlpha = alpha * 0.35
+        ctx.globalAlpha = alpha * 0.28
         ctx.stroke()
 
         // tête

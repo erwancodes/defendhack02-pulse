@@ -1,13 +1,12 @@
-import { useState } from 'react'
 import type { EnergySource } from '../lib/eco2mix'
 import { SOURCE_COLOR } from '../lib/eco2mix'
 
-const ENTRIES: { source: EnergySource; symbol: string; label: string; phrase: string }[] = [
-  { source: 'nucleaire', symbol: '◉', label: 'nucléaire', phrase: 'la colonne vertébrale — 24h/24, sans carbone' },
-  { source: 'eolien', symbol: '◈', label: 'éolien', phrase: 'quand le vent souffle — propre mais intermittent' },
-  { source: 'hydraulique', symbol: '◇', label: 'hydraulique', phrase: "l'eau des barrages — souple, à la demande" },
-  { source: 'solaire', symbol: '○', label: 'solaire', phrase: 'le jour seulement — absent la nuit' },
-  { source: 'gaz', symbol: '◐', label: 'gaz', phrase: 'le renfort fossile — quand la demande grimpe' },
+const ENTRIES: { source: EnergySource; label: string; phrase: string }[] = [
+  { source: 'nucleaire', label: 'nucleaire', phrase: 'colonne vertebrale du reseau' },
+  { source: 'eolien', label: 'eolien', phrase: 'production intermittente du vent' },
+  { source: 'hydraulique', label: 'hydraulique', phrase: 'barrages et pilotage rapide' },
+  { source: 'solaire', label: 'solaire', phrase: 'production visible en journee' },
+  { source: 'gaz', label: 'gaz', phrase: 'renfort thermique quand la demande grimpe' },
 ]
 
 interface Props {
@@ -17,63 +16,59 @@ interface Props {
 }
 
 export function Legend({ isolate, onIsolate, onOpen }: Props) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <div className="flex flex-col items-start gap-2">
-      <button
-        onClick={() => setOpen((o) => { if (!o) onOpen?.(); return !o })}
-        className="control-panel flex h-8 w-8 items-center justify-center border text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
-        style={{
-          borderColor: open ? 'var(--nuclear)' : '#1e3a5f',
-          color: open ? 'var(--nuclear)' : undefined,
-        }}
-        aria-label="comment lire la carte"
-      >
-        ?
-      </button>
-
-      {open && (
-        <div
-          className="control-panel w-[306px] border p-4 fade-up"
-        >
-          <div className="t-label mb-3 text-[var(--engie-blue-soft)]">lecture de la carte</div>
-
-          <div className="flex flex-col gap-2.5">
-            {ENTRIES.map((e) => {
-              const color = SOURCE_COLOR[e.source]
-              const selected = isolate === e.source
-              const dimmed = isolate !== null && !selected
-              return (
-                <button
-                  key={e.source}
-                  onClick={() => onIsolate(selected ? null : e.source)}
-                  className="block w-full text-left transition-opacity"
-                  style={{ opacity: dimmed ? 0.4 : 1 }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span style={{ color, filter: `drop-shadow(0 0 4px ${color})` }}>{e.symbol}</span>
-                    <span className="t-label" style={{ color }}>
-                      {e.label}
-                    </span>
-                    {selected && <span className="t-label text-[var(--text-muted)]">· isolé</span>}
-                  </div>
-                  <div className="t-label mt-0.5 pl-6 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
-                    {e.phrase}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-3 border-t border-[var(--line-strong)] pt-3">
-            <div className="t-label normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em', lineHeight: 1.5 }}>
-              les points qui filent = l'énergie qui circule sur le réseau · les flèches aux
-              bords = les échanges avec l'Europe · clique une source pour l'isoler
-            </div>
+    <div className="legend-panel control-panel w-[318px] border p-3 fade-up">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="t-label text-[var(--engie-blue-soft)]">legende couleurs</div>
+          <div className="t-label mt-0.5 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.02em' }}>
+            clic = toggle source
           </div>
         </div>
-      )}
+        {isolate && (
+          <button
+            type="button"
+            onClick={() => onIsolate(null)}
+            className="t-label border px-2 py-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+            style={{ borderColor: 'var(--line-strong)' }}
+          >
+            tout
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5">
+        {ENTRIES.map((e) => {
+          const color = SOURCE_COLOR[e.source]
+          const selected = isolate === e.source
+          const dimmed = isolate !== null && !selected
+          return (
+            <button
+              key={e.source}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => {
+                onOpen?.()
+                onIsolate(selected ? null : e.source)
+              }}
+              className="legend-toggle min-w-0 border px-2 py-2 text-left"
+              style={{
+                borderColor: selected ? color : 'var(--line-strong)',
+                background: selected ? `${color}22` : 'rgba(4,16,32,0.62)',
+                opacity: dimmed ? 0.38 : 1,
+              }}
+              title={e.phrase}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="legend-swatch" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
+                <span className="t-label truncate" style={{ color }}>
+                  {e.label}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

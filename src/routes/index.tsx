@@ -31,6 +31,8 @@ import { PersoImpact } from '../components/PersoImpact'
 import { TourGuide } from '../components/TourGuide'
 import { DiscoveryScore } from '../components/DiscoveryScore'
 import { SummaryScreen } from '../components/SummaryScreen'
+import { LiveHomesCounter } from '../components/LiveHomesCounter'
+import { DemoControls } from '../components/DemoControls'
 
 const FACETS: Record<string, string> = {
   centrale: 'une centrale survolée',
@@ -105,6 +107,7 @@ function useEcoMix(): EcoMixRecord {
 
 function Home() {
   const live = useEcoMix()
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const [sim, setSim] = useState<EcoMixRecord | null>(null)
   const [titre, setTitre] = useState<string | null>(null)
@@ -122,6 +125,9 @@ function Home() {
   const [discovered, setDiscovered] = useState<Set<string>>(new Set())
   const [lastDiscovery, setLastDiscovery] = useState<string | null>(null)
   const discoveredRef = useRef<Set<string>>(new Set())
+  const [cursorHidden, setCursorHidden] = useState(false)
+  const idleCursorTimer = useRef<number>(0)
+  const autoFullscreenTried = useRef(false)
 
   const discover = useCallback((key: string) => {
     if (discoveredRef.current.has(key)) return
@@ -129,6 +135,21 @@ function Home() {
     setDiscovered(new Set(discoveredRef.current))
     setLastDiscovery(FACETS[key] ?? key)
   }, [])
+
+  const wakeCursor = useCallback(() => {
+    setCursorHidden(false)
+    clearTimeout(idleCursorTimer.current)
+    idleCursorTimer.current = window.setTimeout(() => setCursorHidden(true), 3000)
+  }, [])
+
+  const enterKioskOnFirstGesture = useCallback(() => {
+    wakeCursor()
+    if (autoFullscreenTried.current || document.fullscreenElement) return
+    autoFullscreenTried.current = true
+    document.documentElement.requestFullscreen().catch(() => {
+      /* browser may refuse fullscreen outside trusted gestures */
+    })
+  }, [wakeCursor])
 
   const handleIsolate = useCallback(
     (s: EnergySource | null) => {
@@ -556,6 +577,11 @@ function Home() {
 
   useEffect(() => () => clearTimers(), [])
 
+  useEffect(() => {
+    wakeCursor()
+    return () => clearTimeout(idleCursorTimer.current)
+  }, [wakeCursor])
+
   // Échap → recule d'un niveau (département → région → national)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -578,7 +604,13 @@ function Home() {
   const simActive = sim !== null
 
   return (
-    <div className="control-room scanlines flex h-[100dvh] w-screen flex-col overflow-hidden bg-[var(--background)]">
+    <div
+      ref={rootRef}
+      className={`control-room scanlines flex h-[100dvh] w-screen flex-col overflow-hidden bg-[var(--background)] ${cursorHidden ? 'cursor-idle' : ''}`}
+      onPointerMove={wakeCursor}
+      onPointerDown={enterKioskOnFirstGesture}
+      onKeyDown={wakeCursor}
+    >
       {/* ── Header ── */}
       <header className="control-header relative z-50 flex h-14 shrink-0 items-center justify-between overflow-visible border-b px-4">
         <div className="flex min-w-0 items-center gap-4">
@@ -599,6 +631,8 @@ function Home() {
           </span>
 
           {/* jouer — CTA accentué (jaune) */}
+          <DemoControls data={data} />
+
           <div className="relative">
             <button
               onClick={() => setGameMenu((o) => !o)}
@@ -634,7 +668,7 @@ function Home() {
           {/* découvrir — CTA accentué (bleu) */}
           <button
             onClick={() => (tour !== null ? endTour() : startTour())}
-            className="nav-pill flex items-center gap-1.5"
+            className="nav-pill mobile-hide flex items-center gap-1.5"
             style={{
               borderColor: tour !== null ? 'var(--nuclear)' : 'rgba(59,130,246,0.5)',
               color: tour !== null ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
@@ -647,7 +681,7 @@ function Home() {
           {/* 24h */}
           <button
             onClick={() => (timeMachine ? closeTimeMachine() : openTimeMachine())}
-            className="nav-pill"
+            className="nav-pill mobile-hide"
             style={{
               borderColor: timeMachine ? 'var(--nuclear)' : '#1e3a5f',
               color: timeMachine ? 'var(--engie-blue-soft)' : 'var(--text-primary)',
@@ -660,7 +694,7 @@ function Home() {
           {/* résumé */}
           <button
             onClick={() => { setShowSummary(true); discover('summary') }}
-            className="nav-pill"
+            className="nav-pill mobile-hide"
             style={{ borderColor: '#1e3a5f', color: 'var(--text-primary)' }}
           >
             résumé
@@ -668,7 +702,7 @@ function Home() {
 
           {/* statut live */}
           <span
-            className="t-label flex items-center gap-2 border px-2.5 py-2 text-[var(--text-primary)]"
+            className="mobile-hide t-label flex items-center gap-2 border px-2.5 py-2 text-[var(--text-primary)]"
             style={{ borderColor: 'var(--line-strong)', background: 'rgba(0,110,182,0.08)' }}
           >
             {timeMachine
@@ -704,7 +738,8 @@ function Home() {
           onDoubleClick={() => (focusedRegion || focusedDept ? goBack() : resetSim())}
         >
           {/* la carte remplit toute la zone ; le viewBox épouse le ratio mesuré */}
-          <div ref={mapBoxRef} className="relative h-full w-full">
+          <div ref={mapBoxRef} className="network-wake relative h-full w-full">
+            <div className="wake-sweep" />
             <FranceMap
               data={data}
               regionStates={regionStates}
@@ -734,10 +769,10 @@ function Home() {
                 <div className="absolute left-3 top-3 z-20">
                   <Legend isolate={isolate} onIsolate={handleIsolate} onOpen={() => discover('legend')} />
                 </div>
-                <div className="absolute right-3 top-3 z-20">
+                <div className="mobile-hide absolute right-3 top-3 z-20">
                   <DidYouKnow data={live} />
                 </div>
-                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2">
+                <div className="mobile-hide absolute left-1/2 top-3 z-20 -translate-x-1/2">
                   <DiscoveryScore count={discovered.size} total={TOTAL_FACETS} last={lastDiscovery} />
                 </div>
               </>
@@ -746,6 +781,12 @@ function Home() {
             {/* Visite guidée */}
             {tour !== null && (
               <TourGuide step={tour} total={TOUR.length} text={TOUR[tour].text} onSkip={endTour} />
+            )}
+
+            {!electron && (
+              <div className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2">
+                <LiveHomesCounter data={data} />
+              </div>
             )}
           </div>
 
