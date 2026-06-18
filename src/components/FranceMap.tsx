@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import type { EcoMixRecord, EnergySource } from '../lib/eco2mix'
-import { SOURCE_COLOR } from '../lib/eco2mix'
+import type { EcoMixRecord, EnergySource, RegionalRecord } from '../lib/eco2mix'
+import { SOURCE_COLOR, regionalProduction, tension } from '../lib/eco2mix'
 import { equivalences } from '../lib/pedago'
 import {
   REGIONS,
@@ -18,6 +18,16 @@ import type { View } from './ParticleCanvas'
 const VB_H = VIEWBOX.h
 const MARKER_STROKE = 'rgba(232,244,255,0.88)'
 
+export type MapMode = 'mix' | 'consommation' | 'co2' | 'production' | 'tension'
+
+const MODE_META: Record<MapMode, { label: string; unit: string; low: string; high: string }> = {
+  mix: { label: 'mix live', unit: '', low: 'regions', high: 'centrales' },
+  consommation: { label: 'consommation', unit: 'MW', low: 'faible', high: 'forte' },
+  co2: { label: 'CO2', unit: 'g/kWh', low: 'bas', high: 'haut' },
+  production: { label: 'production', unit: 'MW', low: 'faible', high: 'forte' },
+  tension: { label: 'solde', unit: 'MW', low: 'importe', high: 'exporte' },
+}
+
 function regionFill(state: RegionState): { fill: string; stroke: string; cls: string } {
   switch (state) {
     case 'stress':
@@ -29,6 +39,75 @@ function regionFill(state: RegionState): { fill: string; stroke: string; cls: st
   }
 }
 
+function clamp01(v: number) {
+  return Math.max(0, Math.min(1, v))
+}
+
+function lerp(a: number, b: number, t: number) {
+  return Math.round(a + (b - a) * t)
+}
+
+function rgb(a: [number, number, number], b: [number, number, number], t: number, alpha = 0.42) {
+  return `rgba(${lerp(a[0], b[0], t)},${lerp(a[1], b[1], t)},${lerp(a[2], b[2], t)},${alpha})`
+}
+
+function modeValue(mode: MapMode, data: EcoMixRecord, region: (typeof REGIONS)[number], rec?: RegionalRecord) {
+  const estimatedConsumption = Math.round(data.consommation * region.consoShare)
+  if (mode === 'consommation') return rec?.consommation || estimatedConsumption
+  if (mode === 'co2') return rec?.taux_co2 ?? data.taux_co2
+  if (mode === 'production') return rec ? regionalProduction(rec) : 0
+  if (mode === 'tension') return rec ? regionalProduction(rec) - rec.consommation : 0
+  return estimatedConsumption
+}
+
+function modePaint(
+  mode: MapMode,
+  data: EcoMixRecord,
+  region: (typeof REGIONS)[number],
+  rec?: RegionalRecord,
+): { fill: string; stroke: string; glow?: string; label: string } | null {
+  if (mode === 'mix') return null
+  const value = modeValue(mode, data, region, rec)
+
+  if (mode === 'consommation') {
+    const t = clamp01(value / 12000)
+    return {
+      fill: rgb([6, 24, 43], [216, 179, 63], t, 0.18 + t * 0.42),
+      stroke: t > 0.72 ? '#d8b33f' : '#24739b',
+      glow: t > 0.72 ? 'drop-shadow(0 0 7px rgba(216,179,63,0.42))' : undefined,
+      label: `${value.toLocaleString('fr-FR')} MW`,
+    }
+  }
+
+  if (mode === 'co2') {
+    const t = clamp01(value / 180)
+    return {
+      fill: rgb([34, 197, 94], [249, 115, 22], t, 0.18 + t * 0.48),
+      stroke: t > 0.5 ? '#f97316' : '#22c55e',
+      glow: t > 0.62 ? 'drop-shadow(0 0 7px rgba(249,115,22,0.48))' : undefined,
+      label: `${Math.round(value)} g/kWh`,
+    }
+  }
+
+  if (mode === 'production') {
+    const t = clamp01(value / 16000)
+    return {
+      fill: rgb([6, 24, 43], [0, 166, 214], t, 0.18 + t * 0.45),
+      stroke: t > 0.6 ? '#65d9ff' : '#24739b',
+      glow: t > 0.6 ? 'drop-shadow(0 0 7px rgba(101,217,255,0.42))' : undefined,
+      label: value > 0 ? `${value.toLocaleString('fr-FR')} MW` : 'chargement',
+    }
+  }
+
+  const t = clamp01((value + 5000) / 10000)
+  return {
+    fill: rgb([249, 115, 22], [34, 197, 94], t, 0.24 + Math.abs(t - 0.5) * 0.72),
+    stroke: value >= 0 ? '#22c55e' : '#f97316',
+    glow: Math.abs(value) > 2500 ? `drop-shadow(0 0 7px ${value >= 0 ? 'rgba(34,197,94,0.5)' : 'rgba(249,115,22,0.52)'})` : undefined,
+    label: value === 0 ? 'chargement' : `${value > 0 ? '+' : '-'}${Math.abs(value).toLocaleString('fr-FR')} MW`,
+  }
+}
+
 interface Props {
   data: EcoMixRecord
   regionStates: Record<string, RegionState>
@@ -37,6 +116,8 @@ interface Props {
   focusedDept: string | null
   cityMarkers: MajorCity[]
   selectedCity: MajorCity | null
+  mapMode: MapMode
+  regionalRecords: Record<string, RegionalRecord | null>
   onFocus: (id: string) => void
   onFocusDept: (code: string) => void
   onSelectCity: (city: MajorCity) => void
@@ -52,6 +133,8 @@ export function FranceMap({
   focusedDept,
   cityMarkers,
   selectedCity,
+  mapMode,
+  regionalRecords,
   onFocus,
   onFocusDept,
   onSelectCity,
@@ -108,13 +191,14 @@ export function FranceMap({
           const focused = focusedRegion === r.id
           const dimmed = focusedRegion !== null && !focused
           const isHover = (hoverRegion === r.id || focused) && state === 'normal'
-          const fill = isHover ? '#0a2f4f' : base.fill
-          const stroke = isHover ? '#00a6d6' : base.stroke
+          const overlay = state === 'normal' ? modePaint(mapMode, data, r, regionalRecords[r.id] ?? undefined) : null
+          const fill = isHover ? '#0a2f4f' : overlay?.fill ?? base.fill
+          const stroke = isHover ? '#00a6d6' : overlay?.stroke ?? base.stroke
           const filter = base.cls === 'glow'
             ? 'drop-shadow(0 0 6px #f97316)'
             : isHover
               ? `drop-shadow(0 0 ${focused ? 7 : 5}px rgba(59,130,246,0.55))`
-              : undefined
+              : overlay?.glow
           return (
             <path
               key={r.id}
@@ -311,16 +395,54 @@ export function FranceMap({
         (() => {
           const r = REGIONS.find((x) => x.id === hoverRegion)!
           const conso = Math.round(total * r.consoShare)
+          const metric = modePaint(mapMode, data, r, regionalRecords[r.id] ?? undefined)
           return (
             <Tooltip x={r.label[0]} y={r.label[1]} view={view}>
               <div className="t-label text-[var(--text-primary)]">{r.nom}</div>
               <div className="mt-1 t-num" style={{ fontSize: 16 }}>
-                {conso.toLocaleString('fr-FR')} MW
+                {metric?.label ?? `${conso.toLocaleString('fr-FR')} MW`}
               </div>
               <div className="t-label text-[var(--text-muted)]">consommés ce soir · clic pour explorer</div>
             </Tooltip>
           )
         })()}
+      {mapMode !== 'mix' && !focusedRegion && !focusedDept && (
+        <MapModeLegend mode={mapMode} data={data} />
+      )}
+    </div>
+  )
+}
+
+function MapModeLegend({ mode, data }: { mode: MapMode; data: EcoMixRecord }) {
+  const nationalTension = tension(data)
+  return (
+    <div className="control-panel pointer-events-none absolute bottom-[92px] left-4 z-20 w-[220px] border p-3 fade-up">
+      <div className="flex items-center justify-between gap-3">
+        <span className="t-label text-[var(--text-primary)]">{MODE_META[mode].label}</span>
+        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].unit}</span>
+      </div>
+      <div
+        className="mt-2 h-2 border border-[var(--line-strong)]"
+        style={{
+          background:
+            mode === 'co2'
+              ? 'linear-gradient(90deg, rgba(34,197,94,0.75), rgba(216,179,63,0.72), rgba(249,115,22,0.82))'
+              : mode === 'tension'
+                ? 'linear-gradient(90deg, rgba(249,115,22,0.82), rgba(6,24,43,0.9), rgba(34,197,94,0.78))'
+                : mode === 'production'
+                  ? 'linear-gradient(90deg, rgba(6,24,43,0.9), rgba(0,166,214,0.82))'
+                  : 'linear-gradient(90deg, rgba(6,24,43,0.9), rgba(216,179,63,0.82))',
+        }}
+      />
+      <div className="mt-1 flex items-center justify-between">
+        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].low}</span>
+        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].high}</span>
+      </div>
+      {mode === 'tension' && nationalTension && (
+        <div className="t-label mt-2 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.03em' }}>
+          national: {nationalTension.state}
+        </div>
+      )}
     </div>
   )
 }

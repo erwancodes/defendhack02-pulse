@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 
-import { fetchEcoMix, fetchHistory, FALLBACK, type EcoMixRecord, type EnergySource } from '../lib/eco2mix'
+import {
+  fetchEcoMix,
+  fetchHistory,
+  fetchRegional,
+  FALLBACK,
+  type EcoMixRecord,
+  type EnergySource,
+  type RegionalRecord,
+} from '../lib/eco2mix'
 import { genVoix } from '../lib/voix'
 import { genVoixAI, AI_ENABLED } from '../lib/voixAI'
 import { simulate, type ScenarioId } from '../lib/scenarios'
@@ -12,7 +20,7 @@ import { electronDestination, type Dest } from '../lib/electron'
 import { REGION_INFO } from '../lib/regionInfo'
 import { fetchMajorCities, type MajorCity } from '../lib/cities'
 
-import { FranceMap } from '../components/FranceMap'
+import { FranceMap, type MapMode } from '../components/FranceMap'
 import { ParticleCanvas, type View } from '../components/ParticleCanvas'
 import { EnergyGauges } from '../components/EnergyGauges'
 import { VoixReseau } from '../components/VoixReseau'
@@ -50,6 +58,13 @@ const FACETS: Record<string, string> = {
   summary: 'le bilan du soir',
 }
 const TOTAL_FACETS = Object.keys(FACETS).length
+const MAP_MODES: { id: MapMode; label: string }[] = [
+  { id: 'mix', label: 'Mix' },
+  { id: 'consommation', label: 'Conso' },
+  { id: 'co2', label: 'CO2' },
+  { id: 'production', label: 'Prod' },
+  { id: 'tension', label: 'Solde' },
+]
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -120,6 +135,8 @@ function Home() {
   const [showSummary, setShowSummary] = useState(false)
   const [showQuestionIA, setShowQuestionIA] = useState(false)
   const [simpleMode, setSimpleMode] = useState(false)
+  const [mapMode, setMapMode] = useState<MapMode>('mix')
+  const [regionalRecords, setRegionalRecords] = useState<Record<string, RegionalRecord | null>>({})
   const [game, setGame] = useState<'balance' | 'quiz' | null>(null)
   const [gameMenu, setGameMenu] = useState(false)
   const [electron, setElectron] = useState<{ centrale: Centrale; dest: Dest } | null>(null)
@@ -359,6 +376,21 @@ function Home() {
       alive = false
     }
   }, [focusedDept])
+
+  useEffect(() => {
+    let alive = true
+    Promise.all(
+      REGIONS.map((region) =>
+        fetchRegional(region.code).then((record) => [region.id, record] as const),
+      ),
+    ).then((entries) => {
+      if (!alive) return
+      setRegionalRecords(Object.fromEntries(entries))
+    })
+    return () => {
+      alive = false
+    }
+  }, [live.date_heure])
 
   // Mesure le ratio réel de la zone carte (→ viewBox sans letterbox).
   useEffect(() => {
@@ -629,6 +661,19 @@ function Home() {
           </Link>
 
           {/* jouer — CTA accentué (jaune) */}
+          <div className="map-filter-header mobile-hide">
+            {MAP_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setMapMode(mode.id)}
+                className="map-filter-button"
+                data-active={mapMode === mode.id}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+
           <DemoControls data={data} audioOn={audioOn} onAudioChange={setAudioOn} />
 
           <button
@@ -770,6 +815,8 @@ function Home() {
               focusedDept={focusedDept}
               cityMarkers={deptCities}
               selectedCity={selectedCity}
+              mapMode={mapMode}
+              regionalRecords={regionalRecords}
               onFocus={focusRegion}
               onFocusDept={focusDept}
               onSelectCity={setSelectedCity}
