@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import type { EcoMixRecord, EnergySource, RegionalRecord } from '../lib/eco2mix'
+import type { DeptInstall, EcoMixRecord, EnergySource, RegionalRecord } from '../lib/eco2mix'
 import { SOURCE_COLOR, regionalProduction, tension } from '../lib/eco2mix'
 import { equivalences } from '../lib/pedago'
 import {
@@ -26,6 +26,14 @@ const MODE_META: Record<MapMode, { label: string; unit: string; low: string; hig
   co2: { label: 'CO2', unit: 'g/kWh', low: 'bas', high: 'haut' },
   production: { label: 'production', unit: 'MW', low: 'faible', high: 'forte' },
   tension: { label: 'solde', unit: 'MW', low: 'importe', high: 'exporte' },
+}
+
+const DEPT_MODE_META: Record<MapMode, { label: string; unit: string; low: string; high: string }> = {
+  mix: { label: 'parc departement', unit: '', low: 'departements', high: 'villes' },
+  consommation: { label: 'population', unit: 'hab.', low: 'faible', high: 'forte' },
+  co2: { label: 'densite villes', unit: 'rang', low: 'secondaire', high: 'majeure' },
+  production: { label: 'puissance installee', unit: 'MW', low: 'faible', high: 'forte' },
+  tension: { label: 'installations', unit: 'sites', low: 'peu', high: 'beaucoup' },
 }
 
 function regionFill(state: RegionState): { fill: string; stroke: string; cls: string } {
@@ -108,6 +116,46 @@ function modePaint(
   }
 }
 
+function deptModePaint(
+  mode: MapMode,
+  dept: (typeof DEPARTEMENTS)[number],
+  install?: DeptInstall | null,
+  cities: MajorCity[] = [],
+): { fill: string; stroke: string; glow?: string; label: string } | null {
+  if (mode === 'mix') return null
+
+  if (mode === 'production') {
+    const value = install?.totalMw ?? 0
+    const t = clamp01(value / 2600)
+    return {
+      fill: rgb([6, 24, 43], [0, 166, 214], t, 0.12 + t * 0.46),
+      stroke: t > 0.55 ? '#65d9ff' : 'rgba(0,166,214,0.46)',
+      glow: t > 0.62 ? 'drop-shadow(0 0 6px rgba(101,217,255,0.45))' : undefined,
+      label: value > 0 ? `${Math.round(value).toLocaleString('fr-FR')} MW installes` : 'chargement',
+    }
+  }
+
+  if (mode === 'tension') {
+    const value = install?.totalNb ?? 0
+    const t = clamp01(value / 900)
+    return {
+      fill: rgb([6, 24, 43], [34, 197, 94], t, 0.12 + t * 0.44),
+      stroke: t > 0.55 ? '#22c55e' : 'rgba(34,197,94,0.42)',
+      glow: t > 0.65 ? 'drop-shadow(0 0 6px rgba(34,197,94,0.42))' : undefined,
+      label: value > 0 ? `${value.toLocaleString('fr-FR')} installations` : 'chargement',
+    }
+  }
+
+  const value = cities.reduce((sum, city) => sum + Math.max(0, city.population), 0)
+  const t = clamp01(value / 850000)
+  return {
+    fill: rgb([6, 24, 43], mode === 'co2' ? [249, 115, 22] : [216, 179, 63], t, 0.12 + t * 0.46),
+    stroke: mode === 'co2' ? '#f97316' : '#d8b33f',
+    glow: t > 0.65 ? `drop-shadow(0 0 6px ${mode === 'co2' ? 'rgba(249,115,22,0.45)' : 'rgba(216,179,63,0.42)'})` : undefined,
+    label: value > 0 ? `${value.toLocaleString('fr-FR')} hab. villes` : `${dept.nom}`,
+  }
+}
+
 interface Props {
   data: EcoMixRecord
   regionStates: Record<string, RegionState>
@@ -118,6 +166,8 @@ interface Props {
   selectedCity: MajorCity | null
   mapMode: MapMode
   regionalRecords: Record<string, RegionalRecord | null>
+  deptInstalls: Record<string, DeptInstall | null>
+  deptCitiesByCode: Record<string, MajorCity[]>
   onFocus: (id: string) => void
   onFocusDept: (code: string) => void
   onSelectCity: (city: MajorCity) => void
@@ -135,6 +185,8 @@ export function FranceMap({
   selectedCity,
   mapMode,
   regionalRecords,
+  deptInstalls,
+  deptCitiesByCode,
   onFocus,
   onFocusDept,
   onSelectCity,
@@ -232,18 +284,19 @@ export function FranceMap({
           const hov = hoverDept === d.code
           const dimmed = focusedDept !== null && !focused
           const active = focused || hov
+          const overlay = deptModePaint(mapMode, d, deptInstalls[d.code], deptCitiesByCode[d.code])
           return (
             <path
               key={d.code}
               d={d.d}
-              fill={active ? 'rgba(0,166,214,0.16)' : 'transparent'}
-              stroke={active ? '#00a6d6' : 'rgba(0,166,214,0.32)'}
+              fill={active ? 'rgba(0,166,214,0.18)' : overlay?.fill ?? 'transparent'}
+              stroke={active ? '#00a6d6' : overlay?.stroke ?? 'rgba(0,166,214,0.32)'}
               strokeWidth={(focused ? 1.1 : 0.6) * z}
               strokeLinejoin="round"
               style={{
                 opacity: dimmed ? 0.25 : 1,
                 cursor: 'pointer',
-                filter: active ? 'drop-shadow(0 0 4px rgba(0,166,214,0.5))' : undefined,
+                filter: active ? 'drop-shadow(0 0 4px rgba(0,166,214,0.5))' : overlay?.glow,
                 transition: 'fill 0.25s ease, stroke 0.25s ease, opacity 0.35s ease',
               }}
               onMouseEnter={() => setHoverDept(d.code)}
@@ -259,16 +312,29 @@ export function FranceMap({
             {cityMarkers.map((city) => {
               const z = view.h / VB_H
               const active = selectedCity?.code === city.code
+              const popWeight = clamp01(city.population / 220000)
+              const filtered = mapMode !== 'mix'
+              const cityColor = filtered
+                ? mapMode === 'co2'
+                  ? rgb([216, 179, 63], [249, 115, 22], popWeight, 1)
+                  : mapMode === 'production'
+                    ? rgb([6, 182, 212], [0, 166, 214], popWeight, 1)
+                    : rgb([34, 197, 94], [216, 179, 63], popWeight, 1)
+                : 'var(--nuclear)'
+              const cityRadius = (active ? 5.8 : 3.4 + popWeight * 3.2) * z
               return (
                 <g key={city.code}>
                   <circle
                     cx={city.x}
                     cy={city.y}
-                    r={(active ? 5.5 : 3.8) * z}
-                    fill={active ? 'var(--engie-blue-soft)' : 'var(--nuclear)'}
+                    r={cityRadius}
+                    fill={active ? 'var(--engie-blue-soft)' : cityColor}
                     stroke="var(--background)"
                     strokeWidth={1.2 * z}
-                    style={{ cursor: 'pointer' }}
+                    style={{
+                      cursor: 'pointer',
+                      filter: filtered ? `drop-shadow(0 0 ${4 + popWeight * 5}px ${cityColor})` : undefined,
+                    }}
                     onClick={(e) => {
                       e.stopPropagation()
                       onSelectCity(city)
@@ -357,9 +423,11 @@ export function FranceMap({
         (() => {
           const d = depts.find((x) => x.code === hoverDept)
           if (!d) return null
+          const metric = deptModePaint(mapMode, d, deptInstalls[d.code], deptCitiesByCode[d.code])
           return (
             <Tooltip x={d.label[0]} y={d.label[1]} view={view}>
               <div className="t-label text-[var(--text-primary)]">{d.nom}</div>
+              {metric && <div className="mt-1 t-num" style={{ fontSize: 16 }}>{metric.label}</div>}
               <div className="t-label text-[var(--text-muted)]">clic pour le parc installé</div>
             </Tooltip>
           )
@@ -406,20 +474,21 @@ export function FranceMap({
             </Tooltip>
           )
         })()}
-      {mapMode !== 'mix' && !focusedRegion && !focusedDept && (
-        <MapModeLegend mode={mapMode} data={data} />
+      {mapMode !== 'mix' && (
+        <MapModeLegend mode={mapMode} data={data} level={focusedRegion || focusedDept ? 'departement' : 'region'} />
       )}
     </div>
   )
 }
 
-function MapModeLegend({ mode, data }: { mode: MapMode; data: EcoMixRecord }) {
+function MapModeLegend({ mode, data, level }: { mode: MapMode; data: EcoMixRecord; level: 'region' | 'departement' }) {
   const nationalTension = tension(data)
+  const meta = level === 'departement' ? DEPT_MODE_META[mode] : MODE_META[mode]
   return (
     <div className="control-panel pointer-events-none absolute bottom-[92px] left-4 z-20 w-[220px] border p-3 fade-up">
       <div className="flex items-center justify-between gap-3">
-        <span className="t-label text-[var(--text-primary)]">{MODE_META[mode].label}</span>
-        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].unit}</span>
+        <span className="t-label text-[var(--text-primary)]">{meta.label}</span>
+        <span className="t-label text-[var(--text-muted)]">{meta.unit}</span>
       </div>
       <div
         className="mt-2 h-2 border border-[var(--line-strong)]"
@@ -435,8 +504,8 @@ function MapModeLegend({ mode, data }: { mode: MapMode; data: EcoMixRecord }) {
         }}
       />
       <div className="mt-1 flex items-center justify-between">
-        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].low}</span>
-        <span className="t-label text-[var(--text-muted)]">{MODE_META[mode].high}</span>
+        <span className="t-label text-[var(--text-muted)]">{meta.low}</span>
+        <span className="t-label text-[var(--text-muted)]">{meta.high}</span>
       </div>
       {mode === 'tension' && nationalTension && (
         <div className="t-label mt-2 normal-case text-[var(--text-muted)]" style={{ letterSpacing: '0.03em' }}>

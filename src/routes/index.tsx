@@ -4,8 +4,10 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import {
   fetchEcoMix,
   fetchHistory,
+  fetchDeptInstall,
   fetchRegional,
   FALLBACK,
+  type DeptInstall,
   type EcoMixRecord,
   type EnergySource,
   type RegionalRecord,
@@ -137,6 +139,8 @@ function Home() {
   const [simpleMode, setSimpleMode] = useState(false)
   const [mapMode, setMapMode] = useState<MapMode>('mix')
   const [regionalRecords, setRegionalRecords] = useState<Record<string, RegionalRecord | null>>({})
+  const [deptInstalls, setDeptInstalls] = useState<Record<string, DeptInstall | null>>({})
+  const [deptCitiesByCode, setDeptCitiesByCode] = useState<Record<string, MajorCity[]>>({})
   const [game, setGame] = useState<'balance' | 'quiz' | null>(null)
   const [gameMenu, setGameMenu] = useState(false)
   const [electron, setElectron] = useState<{ centrale: Centrale; dest: Dest } | null>(null)
@@ -370,6 +374,7 @@ function Home() {
     fetchMajorCities(dept).then((cities) => {
       if (!alive) return
       setDeptCities(cities)
+      setDeptCitiesByCode((prev) => ({ ...prev, [dept.code]: cities }))
       setSelectedCity(cities[0] ?? null)
     })
     return () => {
@@ -391,6 +396,34 @@ function Home() {
       alive = false
     }
   }, [live.date_heure])
+
+  useEffect(() => {
+    if (!focusedRegion) return
+    const visibleDepts = DEPARTEMENTS.filter((dept) => dept.region === focusedRegion)
+    let alive = true
+
+    Promise.all(
+      visibleDepts.map((dept) =>
+        fetchDeptInstall(dept.code).then((install) => [dept.code, install] as const),
+      ),
+    ).then((entries) => {
+      if (!alive) return
+      setDeptInstalls((prev) => ({ ...prev, ...Object.fromEntries(entries) }))
+    })
+
+    Promise.all(
+      visibleDepts.map((dept) =>
+        fetchMajorCities(dept).then((cities) => [dept.code, cities] as const),
+      ),
+    ).then((entries) => {
+      if (!alive) return
+      setDeptCitiesByCode((prev) => ({ ...prev, ...Object.fromEntries(entries) }))
+    })
+
+    return () => {
+      alive = false
+    }
+  }, [focusedRegion])
 
   // Mesure le ratio réel de la zone carte (→ viewBox sans letterbox).
   useEffect(() => {
@@ -817,6 +850,8 @@ function Home() {
               selectedCity={selectedCity}
               mapMode={mapMode}
               regionalRecords={regionalRecords}
+              deptInstalls={deptInstalls}
+              deptCitiesByCode={deptCitiesByCode}
               onFocus={focusRegion}
               onFocusDept={focusDept}
               onSelectCity={setSelectedCity}
