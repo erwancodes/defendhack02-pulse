@@ -128,7 +128,6 @@ function Home() {
   const discoveredRef = useRef<Set<string>>(new Set())
   const [cursorHidden, setCursorHidden] = useState(false)
   const idleCursorTimer = useRef<number>(0)
-  const autoFullscreenTried = useRef(false)
 
   const discover = useCallback((key: string) => {
     if (discoveredRef.current.has(key)) return
@@ -142,15 +141,6 @@ function Home() {
     clearTimeout(idleCursorTimer.current)
     idleCursorTimer.current = window.setTimeout(() => setCursorHidden(true), 3000)
   }, [])
-
-  const enterKioskOnFirstGesture = useCallback(() => {
-    wakeCursor()
-    if (autoFullscreenTried.current || document.fullscreenElement) return
-    autoFullscreenTried.current = true
-    document.documentElement.requestFullscreen().catch(() => {
-      /* browser may refuse fullscreen outside trusted gestures */
-    })
-  }, [wakeCursor])
 
   const handleIsolate = useCallback(
     (s: EnergySource | null) => {
@@ -609,7 +599,7 @@ function Home() {
       ref={rootRef}
       className={`control-room scanlines flex h-[100dvh] w-screen flex-col overflow-hidden bg-[var(--background)] ${cursorHidden ? 'cursor-idle' : ''}`}
       onPointerMove={wakeCursor}
-      onPointerDown={enterKioskOnFirstGesture}
+      onPointerDown={wakeCursor}
       onKeyDown={wakeCursor}
     >
       {/* ── Header ── */}
