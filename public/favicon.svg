@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="pulseBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a2238"/>
+      <stop offset="1" stop-color="#020816"/>
+    </linearGradient>
+    <linearGradient id="pulseLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#006eb6"/>
+      <stop offset="0.5" stop-color="#00a6d6"/>
+      <stop offset="1" stop-color="#65d9ff"/>
+    </linearGradient>
+    <filter id="pulseGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.05" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- plaque -->
+  <rect x="1" y="1" width="30" height="30" rx="7.5" fill="url(#pulseBg)" stroke="#0e3e62" stroke-width="1"/>
+  <!-- lueur centrale -->
+  <ellipse cx="16" cy="16" rx="13" ry="9" fill="#00a6d6" opacity="0.08"/>
+
+  <!-- battement du réseau -->
+  <path d="M4 17 H10.5 L12.5 17 L15.5 7.5 L18.6 24.5 L20.8 13.5 L22.3 17 H28"
+        stroke="url(#pulseLine)" stroke-width="2.3"
+        stroke-linecap="round" stroke-linejoin="round" filter="url(#pulseGlow)"/>
+
+  <!-- nœud lumineux au sommet -->
+  <circle cx="15.5" cy="7.5" r="2" fill="#9fe6ff" filter="url(#pulseGlow)"/>
+</svg>
