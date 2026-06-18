@@ -12,6 +12,7 @@ import {
 } from '../lib/regions'
 import { DEPARTEMENTS } from '../lib/departements'
 import { EUROPE } from '../lib/europe'
+import type { MajorCity } from '../lib/cities'
 import type { View } from './ParticleCanvas'
 
 const VB_H = VIEWBOX.h
@@ -33,8 +34,11 @@ interface Props {
   view: View
   focusedRegion: string | null
   focusedDept: string | null
+  cityMarkers: MajorCity[]
+  selectedCity: MajorCity | null
   onFocus: (id: string) => void
   onFocusDept: (code: string) => void
+  onSelectCity: (city: MajorCity) => void
   onElectron: (c: Centrale) => void
   onVoice: (action: string) => void
 }
@@ -45,8 +49,11 @@ export function FranceMap({
   view,
   focusedRegion,
   focusedDept,
+  cityMarkers,
+  selectedCity,
   onFocus,
   onFocusDept,
+  onSelectCity,
   onElectron,
   onVoice,
 }: Props) {
@@ -144,14 +151,14 @@ export function FranceMap({
             <path
               key={d.code}
               d={d.d}
-              fill={active ? 'rgba(59,130,246,0.16)' : 'transparent'}
+              fill={active ? 'rgba(0,166,214,0.16)' : 'transparent'}
               stroke={active ? '#00a6d6' : 'rgba(0,166,214,0.32)'}
               strokeWidth={(focused ? 1.1 : 0.6) * z}
               strokeLinejoin="round"
               style={{
                 opacity: dimmed ? 0.25 : 1,
                 cursor: 'pointer',
-                filter: active ? 'drop-shadow(0 0 4px rgba(59,130,246,0.5))' : undefined,
+                filter: active ? 'drop-shadow(0 0 4px rgba(0,166,214,0.5))' : undefined,
                 transition: 'fill 0.25s ease, stroke 0.25s ease, opacity 0.35s ease',
               }}
               onMouseEnter={() => setHoverDept(d.code)}
@@ -160,6 +167,56 @@ export function FranceMap({
             />
           )
         })}
+
+        {/* villes importantes du département ouvert */}
+        {focusedDept && cityMarkers.length > 0 && (
+          <g>
+            {cityMarkers.map((city) => {
+              const z = view.h / VB_H
+              const active = selectedCity?.code === city.code
+              return (
+                <g key={city.code}>
+                  <circle
+                    cx={city.x}
+                    cy={city.y}
+                    r={(active ? 5.5 : 3.8) * z}
+                    fill={active ? 'var(--engie-blue-soft)' : 'var(--nuclear)'}
+                    stroke="var(--background)"
+                    strokeWidth={1.2 * z}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectCity(city)
+                    }}
+                  />
+                  {active && (
+                    <>
+                      <circle
+                        cx={city.x}
+                        cy={city.y}
+                        r={10 * z}
+                        fill="none"
+                        stroke="var(--engie-blue-soft)"
+                        strokeWidth={0.7 * z}
+                        opacity={0.55}
+                      />
+                      <text
+                        x={city.x + 7 * z}
+                        y={city.y - 7 * z}
+                        fill="var(--text-primary)"
+                        fontSize={10 * z}
+                        fontFamily="JetBrains Mono, ui-monospace, monospace"
+                        style={{ pointerEvents: 'none', paintOrder: 'stroke', stroke: 'var(--background)', strokeWidth: 3 * z }}
+                      >
+                        {city.nom}
+                      </text>
+                    </>
+                  )}
+                </g>
+              )
+            })}
+          </g>
+        )}
 
         {/* centrales pulsantes (taille ~ constante à l'écran via le facteur de zoom) */}
         {CENTRALES.map((c) => {

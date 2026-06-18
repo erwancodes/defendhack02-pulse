@@ -10,6 +10,7 @@ import { DEPARTEMENTS } from '../lib/departements'
 import { FRANCE_CENTROID } from '../lib/europe'
 import { electronDestination, type Dest } from '../lib/electron'
 import { REGION_INFO } from '../lib/regionInfo'
+import { fetchMajorCities, type MajorCity } from '../lib/cities'
 
 import { FranceMap } from '../components/FranceMap'
 import { ParticleCanvas, type View } from '../components/ParticleCanvas'
@@ -138,6 +139,8 @@ function Home() {
   )
   const [focusedRegion, setFocusedRegion] = useState<string | null>(null)
   const [focusedDept, setFocusedDept] = useState<string | null>(null)
+  const [deptCities, setDeptCities] = useState<MajorCity[]>([])
+  const [selectedCity, setSelectedCity] = useState<MajorCity | null>(null)
   // ratio réel de la zone carte (mesuré) → le viewBox l'épouse, zéro letterbox
   const [boxAspect, setBoxAspect] = useState(VIEWBOX.w / VIEWBOX.h)
   const mapBoxRef = useRef<HTMLDivElement>(null)
@@ -207,6 +210,8 @@ function Home() {
       lastInteract.current = Date.now()
       setFocusedRegion(id)
       setFocusedDept(null)
+      setDeptCities([])
+      setSelectedCity(null)
       setVoice(REGION_INFO[id]?.note ?? '')
       animateView(viewForBbox(r.bbox, boxAspect))
       discover('region')
@@ -221,6 +226,7 @@ function Home() {
       lastInteract.current = Date.now()
       setFocusedRegion(d.region)
       setFocusedDept(code)
+      setSelectedCity(null)
       animateView(viewForBbox(d.bbox, boxAspect))
       discover('dept')
     },
@@ -232,6 +238,8 @@ function Home() {
     if (focusedDept) {
       const d = DEPARTEMENTS.find((x) => x.code === focusedDept)
       setFocusedDept(null)
+      setDeptCities([])
+      setSelectedCity(null)
       const r = d && REGIONS.find((x) => x.id === d.region)
       if (r) {
         setVoice(REGION_INFO[r.id]?.note ?? '')
@@ -248,6 +256,8 @@ function Home() {
   const unfocus = useCallback(() => {
     setFocusedDept(null)
     setFocusedRegion(null)
+    setDeptCities([])
+    setSelectedCity(null)
     animateView(nationalView(boxAspect))
   }, [animateView, boxAspect])
 
@@ -282,6 +292,8 @@ function Home() {
     setRegionStates({})
     setFocusedRegion(null)
     setFocusedDept(null)
+    setDeptCities([])
+    setSelectedCity(null)
     animateView(nationalView(boxAspect))
     setTimeMachine(true)
     discover('timemachine')
@@ -315,6 +327,23 @@ function Home() {
     }, 110)
     return () => clearInterval(id)
   }, [timeMachine, playing, history.length])
+
+  useEffect(() => {
+    if (!focusedDept) return
+    const dept = DEPARTEMENTS.find((x) => x.code === focusedDept)
+    if (!dept) return
+    let alive = true
+    setDeptCities([])
+    setSelectedCity(null)
+    fetchMajorCities(dept).then((cities) => {
+      if (!alive) return
+      setDeptCities(cities)
+      setSelectedCity(cities[0] ?? null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [focusedDept])
 
   // Mesure le ratio réel de la zone carte (→ viewBox sans letterbox).
   useEffect(() => {
@@ -682,8 +711,11 @@ function Home() {
               view={view}
               focusedRegion={focusedRegion}
               focusedDept={focusedDept}
+              cityMarkers={deptCities}
+              selectedCity={selectedCity}
               onFocus={focusRegion}
               onFocusDept={focusDept}
+              onSelectCity={setSelectedCity}
               onElectron={startElectron}
               onVoice={onVoice}
             />
@@ -723,7 +755,14 @@ function Home() {
               const d = DEPARTEMENTS.find((x) => x.code === focusedDept)
               const r = d && REGIONS.find((x) => x.id === d.region)
               return d && r ? (
-                <DepartmentDetail dept={d} regionNom={r.nom} onBack={backToRegion} />
+                <DepartmentDetail
+                  dept={d}
+                  regionNom={r.nom}
+                  cities={deptCities}
+                  selectedCity={selectedCity}
+                  onSelectCity={setSelectedCity}
+                  onBack={backToRegion}
+                />
               ) : null
             })()}
 
