@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 
 import { fetchEcoMix, fetchHistory, FALLBACK, type EcoMixRecord, type EnergySource } from '../lib/eco2mix'
 import { genVoix } from '../lib/voix'
@@ -623,6 +623,10 @@ function Home() {
           <span className="t-label mr-1 hidden text-[var(--text-muted)] lg:inline">
             données rte · {formatHeure(data.date_heure)}
           </span>
+
+          <Link to="/stats" className="nav-pill">
+            stats live
+          </Link>
 
           {/* jouer — CTA accentué (jaune) */}
           <DemoControls data={data} audioOn={audioOn} onAudioChange={setAudioOn} />
